@@ -18,13 +18,11 @@ export interface Article {
   published_at: string | null;
   ingested_at: string;
   topic_tags: string[];
-  // ideology scores (Build 3)
   identity_score: number | null;
   state_trust_score: number | null;
   economic_score: number | null;
   institution_score: number | null;
-  // joined
-  sources?: Source;
+  sources?: Pick<Source, "id" | "name" | "home_url" | "language">;
 }
 
 export const TOPICS = [

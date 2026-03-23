@@ -1,25 +1,29 @@
 .shell {
-  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  height: 100dvh;
   overflow: hidden;
 }
 
-/* List mode */
+/* List mode: allow natural page scroll */
+.listMode {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+/* List mode main content */
 .listMain {
-  flex: 1;
   max-width: var(--max-w);
   width: 100%;
   margin: 0 auto;
-  padding: 0 var(--page-pad) 5rem;
+  padding: 1rem var(--page-pad) 5rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  overflow-y: auto;
 }
 
 .sectionLabel {
-  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.14em;
@@ -31,7 +35,6 @@
 .grid {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .empty {

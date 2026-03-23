@@ -2,8 +2,9 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   position: sticky;
-  top: 52px;  /* below TopBar */
+  top: 52px;
   z-index: 40;
+  flex-shrink: 0;
 }
 
 .track {
@@ -17,12 +18,13 @@
   -ms-overflow-style: none;
 }
 
-.track::-webkit-scrollbar {
-  display: none;
-}
+.track::-webkit-scrollbar { display: none; }
 
 .pill {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 400;
@@ -33,7 +35,6 @@
   padding: 0.3rem 0.85rem;
   white-space: nowrap;
   transition: all 0.15s;
-  letter-spacing: 0.01em;
 }
 
 .pill:hover {
@@ -45,4 +46,19 @@
   color: var(--pill-text-active);
   background: var(--pill-active);
   border-color: rgba(232, 132, 58, 0.3);
+}
+
+/* Saved topic — subtle indicator without being active */
+.pillSaved {
+  color: var(--text-secondary);
+  border-color: rgba(232, 132, 58, 0.15);
+}
+
+.savedDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+  flex-shrink: 0;
 }

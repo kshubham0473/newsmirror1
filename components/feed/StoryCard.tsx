@@ -24,15 +24,17 @@ interface Props {
 
 export default function StoryCard({ article, isActive, position, total }: Props) {
   const [saved, setSaved] = useState(false);
-  const hasImage = !!article.image_url;
+  const [imgFailed, setImgFailed] = useState(false);
+  const hasImage = !!article.image_url && !imgFailed;
   const sourceName = article.sources?.name ?? "Unknown";
   const age = timeAgo(article.published_at ?? article.ingested_at);
   const tag = article.topic_tags?.[0];
 
   return (
-    <article className={`${styles.card} ${isActive ? styles.active : ""} ${hasImage ? styles.hasImage : ""}`}>
-
-      {/* Background image with overlay */}
+    <article
+      className={`${styles.card} ${isActive ? styles.active : ""} ${hasImage ? styles.hasImage : ""}`}
+    >
+      {/* Background image */}
       {hasImage && (
         <div className={styles.imageBg}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -41,70 +43,74 @@ export default function StoryCard({ article, isActive, position, total }: Props)
             alt=""
             className={styles.bgImg}
             loading="lazy"
-            onError={(e) => {
-              const el = e.target as HTMLImageElement;
-              el.parentElement!.style.display = "none";
-            }}
+            onError={() => setImgFailed(true)}
           />
-          <div className={styles.imageOverlay} />
+          {/* Multi-layer overlay for guaranteed readability */}
+          <div className={styles.overlayTop} />
+          <div className={styles.overlayBottom} />
         </div>
       )}
 
-      {/* Card content */}
       <div className={styles.content}>
-
-        {/* Top meta row */}
-        <div className={styles.topRow}>
-          <div className={styles.metaLeft}>
+        {/* ── Top meta bar with frosted pill ── */}
+        <div className={styles.topBar}>
+          <div className={styles.metaPill}>
             <span className={styles.source}>{sourceName}</span>
-            {tag && <span className={styles.tag}>{tag}</span>}
+            {tag && (
+              <>
+                <span className={styles.metaDivider} aria-hidden>·</span>
+                <span className={styles.tag}>{tag}</span>
+              </>
+            )}
           </div>
-          <div className={styles.metaRight}>
+          <div className={styles.metaPill}>
             <span className={styles.age}>{age}</span>
+            <span className={styles.metaDivider} aria-hidden>·</span>
             <span className={styles.counter}>{position}/{total}</span>
           </div>
         </div>
 
-        {/* Main content area */}
+        {/* ── Spacer pushes body to bottom ── */}
+        <div className={styles.spacer} />
+
+        {/* ── Body: headline + summary ── */}
         <div className={styles.body}>
-          {/* Headline */}
           <h2 className={styles.headline}>{article.headline}</h2>
 
-          {/* Summary */}
           {article.summary && (
             <p className={styles.summary}>{article.summary}</p>
           )}
-        </div>
 
-        {/* Bottom action row */}
-        <div className={styles.actions}>
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.readBtn}
-          >
-            Read full story
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M1 11L11 1M11 1H5M11 1V7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </a>
+          {/* ── Actions ── */}
+          <div className={styles.actions}>
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.readBtn}
+            >
+              Read full story
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden>
+                <path d="M1 10L10 1M10 1H4M10 1V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </a>
 
-          <button
-            className={`${styles.saveBtn} ${saved ? styles.saveBtnActive : ""}`}
-            onClick={() => setSaved((v) => !v)}
-            aria-label={saved ? "Unsave story" : "Save story"}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path
-                d="M3 2h10a1 1 0 0 1 1 1v11l-6-3-6 3V3a1 1 0 0 1 1-1z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-                fill={saved ? "currentColor" : "none"}
-              />
-            </svg>
-          </button>
+            <button
+              className={`${styles.saveBtn} ${saved ? styles.saveBtnActive : ""}`}
+              onClick={() => setSaved((v) => !v)}
+              aria-label={saved ? "Unsave" : "Save"}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path
+                  d="M3 2h10a1 1 0 0 1 1 1v11l-6-3-6 3V3a1 1 0 0 1 1-1z"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                  fill={saved ? "currentColor" : "none"}
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </article>

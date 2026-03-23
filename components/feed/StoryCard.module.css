@@ -5,19 +5,18 @@
   flex-direction: column;
   background: var(--surface);
   overflow: hidden;
-  /* Subtle entry animation when card becomes active */
-  transition: opacity 0.3s ease;
+  transition: opacity 0.35s ease;
 }
 
 .card:not(.active) {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .active {
   opacity: 1;
 }
 
-/* ── Background image ──────────────────────────────── */
+/* ── Background image ─────────────────────────────────────── */
 .imageBg {
   position: absolute;
   inset: 0;
@@ -28,168 +27,190 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 20%;
 }
 
-.imageOverlay {
+/* Top overlay — subtle dark fade for meta readability */
+.overlayTop {
   position: absolute;
-  inset: 0;
-  /* Strong bottom-up gradient so text is always readable */
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 140px;
   background: linear-gradient(
-    to top,
-    rgba(10, 10, 10, 0.97) 0%,
-    rgba(10, 10, 10, 0.75) 45%,
-    rgba(10, 10, 10, 0.25) 75%,
-    rgba(10, 10, 10, 0.1) 100%
+    to bottom,
+    rgba(0, 0, 0, 0.72) 0%,
+    rgba(0, 0, 0, 0) 100%
   );
 }
 
-/* ── Content ───────────────────────────────────────── */
+/* Bottom overlay — strong fade for text readability */
+.overlayBottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 75%;
+  background: linear-gradient(
+    to top,
+    rgba(6, 6, 6, 0.98) 0%,
+    rgba(6, 6, 6, 0.92) 30%,
+    rgba(6, 6, 6, 0.65) 55%,
+    rgba(6, 6, 6, 0) 100%
+  );
+}
+
+/* ── Content layer ────────────────────────────────────────── */
 .content {
   position: relative;
   z-index: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-  /* Safe area for notched phones */
-  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  padding: 0.85rem 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
-/* ── Top meta row ──────────────────────────────────── */
-.topRow {
+/* ── Top meta bar — liquid glass pills ───────────────────── */
+.topBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: auto;
+  gap: 0.5rem;
 }
 
-.metaLeft {
+/* Frosted glass pill */
+.metaPill {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  padding: 4px 10px;
 }
 
 .source {
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--accent);
 }
 
 .tag {
   font-size: 10px;
-  color: var(--text-tertiary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 2px 8px;
-  border-radius: 99px;
+  color: rgba(255, 255, 255, 0.65);
   text-transform: capitalize;
 }
 
-.metaRight {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.metaDivider {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .age {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .counter {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: rgba(255, 255, 255, 0.4);
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Body ──────────────────────────────────────────── */
+/* ── Spacer ───────────────────────────────────────────────── */
+.spacer {
+  flex: 1;
+  min-height: 1rem;
+}
+
+/* ── Body ─────────────────────────────────────────────────── */
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  margin-top: auto;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
 }
 
 .headline {
   font-family: var(--font-display);
-  font-size: clamp(1.4rem, 4.5vw, 1.9rem);
+  font-size: clamp(1.25rem, 4vw, 1.75rem);
   font-weight: 600;
-  line-height: 1.2;
-  color: var(--text-primary);
+  line-height: 1.25;
+  color: #ffffff;
   letter-spacing: -0.02em;
 }
 
-/* On image cards, headline is always bright */
-.hasImage .headline {
-  color: #ffffff;
+/* No image — use theme color instead of forced white */
+.card:not(.hasImage) .headline {
+  color: var(--text-primary);
 }
 
 .summary {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
+  /* Show full summary — no clamp */
+  display: block;
+}
+
+.card:not(.hasImage) .summary {
   color: var(--text-secondary);
-  /* Max 4 lines before truncating */
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
-.hasImage .summary {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-/* ── Actions ───────────────────────────────────────── */
+/* ── Actions ──────────────────────────────────────────────── */
 .actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 0.15rem;
 }
 
-.hasImage .actions {
-  border-top-color: rgba(255, 255, 255, 0.1);
+.card:not(.hasImage) .actions {
+  border-top-color: var(--border);
 }
 
 .readBtn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
   transition: opacity 0.15s;
 }
 
 .readBtn:hover {
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
 .saveBtn {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--text-tertiary);
-  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all 0.15s;
 }
 
 .saveBtn:hover {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .saveBtnActive {
   color: var(--accent) !important;
   background: var(--accent-dim) !important;
+  border-color: rgba(232, 132, 58, 0.3) !important;
 }
