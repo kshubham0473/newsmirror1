@@ -1,0 +1,48 @@
+.nav {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 52px;  /* below TopBar */
+  z-index: 40;
+}
+
+.track {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0.6rem var(--page-pad);
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.track::-webkit-scrollbar {
+  display: none;
+}
+
+.pill {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  background: var(--pill-bg);
+  border: 1px solid transparent;
+  border-radius: 99px;
+  padding: 0.3rem 0.85rem;
+  white-space: nowrap;
+  transition: all 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.pill:hover {
+  color: var(--text-secondary);
+  background: var(--surface-2);
+}
+
+.pillActive {
+  color: var(--pill-text-active);
+  background: var(--pill-active);
+  border-color: rgba(232, 132, 58, 0.3);
+}
