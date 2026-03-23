@@ -25,7 +25,4 @@ export default async function FeedPage() {
 
   return <FeedClient initialArticles={(data as unknown as any) ?? []} />;
 }
-```
-
-Scroll down → click **Commit changes** → Vercel will redeploy automatically.
 
