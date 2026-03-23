@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Article } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import ArticleCard from "./ArticleCard";
+import CardFeed from "./CardFeed";
 import TopBar from "../ui/TopBar";
 import TopicFilter from "../ui/TopicFilter";
 import styles from "./FeedClient.module.css";
@@ -12,12 +13,25 @@ interface Props {
   initialArticles: Article[];
 }
 
+type ViewMode = "cards" | "list";
+
 export default function FeedClient({ initialArticles }: Props) {
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
-  // Unique sources from articles
+  // Persist view preference locally
+  useEffect(() => {
+    const saved = localStorage.getItem("nm_view") as ViewMode | null;
+    if (saved === "list" || saved === "cards") setViewMode(saved);
+  }, []);
+
+  const setView = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("nm_view", mode);
+  };
+
   const sources = useMemo(() => {
     const seen = new Map<string, string>();
     for (const a of initialArticles) {
@@ -44,7 +58,7 @@ export default function FeedClient({ initialArticles }: Props) {
     });
   }, [initialArticles, activeTopic, activeSource, search]);
 
-  // Group: today vs earlier
+  // List mode grouping
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const today = filtered.filter(
@@ -62,6 +76,8 @@ export default function FeedClient({ initialArticles }: Props) {
         onSourceChange={setActiveSource}
         search={search}
         onSearchChange={setSearch}
+        viewMode={viewMode}
+        onViewModeChange={setView}
       />
 
       <TopicFilter
@@ -70,36 +86,48 @@ export default function FeedClient({ initialArticles }: Props) {
         onChange={setActiveTopic}
       />
 
-      <main className={styles.main}>
-        {filtered.length === 0 ? (
-          <div className={styles.empty}>
-            <p>No stories match your filters.</p>
-          </div>
-        ) : (
-          <>
-            {today.length > 0 && (
-              <section>
-                <h2 className={styles.sectionLabel}>Today</h2>
-                <div className={styles.grid}>
-                  {today.map((article, i) => (
-                    <ArticleCard key={article.id} article={article} featured={i === 0 && !activeTopic} />
-                  ))}
-                </div>
-              </section>
-            )}
-            {earlier.length > 0 && (
-              <section>
-                <h2 className={styles.sectionLabel}>Earlier</h2>
-                <div className={styles.grid}>
-                  {earlier.map((article) => (
-                    <ArticleCard key={article.id} article={article} featured={false} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </main>
+      {viewMode === "cards" ? (
+        <CardFeed articles={filtered} />
+      ) : (
+        <main className={styles.listMain}>
+          {filtered.length === 0 ? (
+            <div className={styles.empty}>
+              <p>No stories match your filters.</p>
+            </div>
+          ) : (
+            <>
+              {today.length > 0 && (
+                <section>
+                  <h2 className={styles.sectionLabel}>Today</h2>
+                  <div className={styles.grid}>
+                    {today.map((article, i) => (
+                      <ArticleCard
+                        key={article.id}
+                        article={article}
+                        featured={i === 0 && !activeTopic}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+              {earlier.length > 0 && (
+                <section>
+                  <h2 className={styles.sectionLabel}>Earlier</h2>
+                  <div className={styles.grid}>
+                    {earlier.map((article) => (
+                      <ArticleCard
+                        key={article.id}
+                        article={article}
+                        featured={false}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </main>
+      )}
     </div>
   );
 }

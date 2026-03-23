@@ -6,6 +6,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .inner {
@@ -16,7 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 /* Wordmark */
@@ -29,7 +30,7 @@
 
 .logo {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--bg);
   background: var(--accent);
@@ -40,6 +41,7 @@
   align-items: center;
   justify-content: center;
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 
 .name {
@@ -50,22 +52,24 @@
   letter-spacing: -0.01em;
 }
 
-/* Actions */
+/* Actions row */
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .iconBtn {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 
 .iconBtn:hover {
@@ -81,8 +85,7 @@
   background: var(--surface);
   border: 1px solid var(--border-hover);
   border-radius: var(--r-sm);
-  padding: 0 0.25rem 0 0.75rem;
-  flex: 1;
+  padding: 0 0.25rem 0 0.65rem;
 }
 
 .searchInput {
@@ -92,7 +95,7 @@
   font-family: var(--font-body);
   font-size: 13px;
   color: var(--text-primary);
-  width: 160px;
+  width: 130px;
   padding: 0.4rem 0;
 }
 
@@ -100,27 +103,54 @@
   color: var(--text-tertiary);
 }
 
+/* View toggle */
+.viewToggle {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.viewBtn {
+  width: 30px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: all 0.15s;
+}
+
+.viewBtn:hover {
+  color: var(--text-secondary);
+}
+
+.viewBtnActive {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
 /* Source filter */
 .sourceWrap {
   position: relative;
+  flex-shrink: 0;
 }
 
 .sourceBtn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   font-size: 12px;
   font-weight: 400;
   color: var(--text-secondary);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 0.4rem 0.65rem;
-  white-space: nowrap;
+  padding: 0.35rem 0.55rem;
   transition: all 0.15s;
-  max-width: 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 110px;
 }
 
 .sourceBtn:hover {
@@ -133,6 +163,18 @@
   color: var(--accent);
 }
 
+.sourceBtnText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
 .sourceDropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -142,10 +184,10 @@
   border-radius: var(--r-md);
   padding: 0.35rem;
   min-width: 160px;
-  max-height: 280px;
+  max-height: 260px;
   overflow-y: auto;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
 }
 
 .sourceOption {
@@ -154,7 +196,7 @@
   text-align: left;
   font-size: 13px;
   color: var(--text-secondary);
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.75rem;
   border-radius: var(--r-sm);
   transition: all 0.12s;
   white-space: nowrap;
