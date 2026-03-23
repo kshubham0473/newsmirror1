@@ -23,6 +23,9 @@ export default async function FeedPage() {
     console.error("Feed fetch error:", error);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <FeedClient initialArticles={(data as any) ?? []} />;
+  return <FeedClient initialArticles={(data as unknown as any) ?? []} />;
 }
+```
+
+Scroll down → click **Commit changes** → Vercel will redeploy automatically.
+
