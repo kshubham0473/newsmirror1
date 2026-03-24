@@ -1,0 +1,225 @@
+"use client";
+
+import { useState } from "react";
+import styles from "./AdminSources.module.css";
+
+interface Source {
+  id: string;
+  name: string;
+  rss_url: string;
+  home_url: string;
+  language: string;
+  created_at: string;
+  article_count: number;
+}
+
+interface Props {
+  initialSources: Source[];
+}
+
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "hi", label: "Hindi" },
+  { value: "mr", label: "Marathi" },
+  { value: "ta", label: "Tamil" },
+  { value: "te", label: "Telugu" },
+  { value: "bn", label: "Bengali" },
+];
+
+export default function AdminSources({ initialSources }: Props) {
+  const [sources, setSources] = useState<Source[]>(initialSources);
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [form, setForm] = useState({
+    name: "",
+    rss_url: "",
+    home_url: "",
+    language: "en",
+  });
+
+  const flash = (msg: string, type: "success" | "error") => {
+    if (type === "success") { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+    else { setError(msg); setTimeout(() => setError(""), 5000); }
+  };
+
+  const handleAdd = async () => {
+    if (!form.name || !form.rss_url || !form.home_url) {
+      flash("All fields are required.", "error");
+      return;
+    }
+    setAdding(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        flash(data.error ?? "Failed to add source.", "error");
+      } else {
+        setSources((prev) =>
+          [...prev, { ...data, article_count: 0 }].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
+        setForm({ name: "", rss_url: "", home_url: "", language: "en" });
+        flash(`${data.name} added successfully.`, "success");
+      }
+    } catch {
+      flash("Network error. Please try again.", "error");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}"? This won't delete existing articles.`)) return;
+    setDeleting(id);
+    try {
+      const res = await fetch("/api/sources", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setSources((prev) => prev.filter((s) => s.id !== id));
+        flash(`${name} removed.`, "success");
+      } else {
+        flash("Failed to remove source.", "error");
+      }
+    } catch {
+      flash("Network error.", "error");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.container}>
+        {/* Header */}
+        <div className={styles.header}>
+          <div>
+            <a href="/feed" className={styles.backLink}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Back to feed
+            </a>
+            <h1 className={styles.title}>News sources</h1>
+            <p className={styles.subtitle}>{sources.length} sources · {sources.reduce((n, s) => n + s.article_count, 0)} summarised articles</p>
+          </div>
+        </div>
+
+        {/* Toast messages */}
+        {error && <div className={styles.toastError}>{error}</div>}
+        {success && <div className={styles.toastSuccess}>{success}</div>}
+
+        {/* Add source form */}
+        <div className={styles.addCard}>
+          <h2 className={styles.addTitle}>Add new source</h2>
+          <div className={styles.formGrid}>
+            <div className={styles.field}>
+              <label className={styles.label}>Source name</label>
+              <input
+                className={styles.input}
+                placeholder="e.g. The Wire"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Language</label>
+              <select
+                className={styles.input}
+                value={form.language}
+                onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className={`${styles.field} ${styles.fieldFull}`}>
+              <label className={styles.label}>RSS feed URL</label>
+              <input
+                className={styles.input}
+                placeholder="https://example.com/feed/"
+                value={form.rss_url}
+                onChange={(e) => setForm((f) => ({ ...f, rss_url: e.target.value }))}
+                type="url"
+              />
+            </div>
+            <div className={`${styles.field} ${styles.fieldFull}`}>
+              <label className={styles.label}>Homepage URL</label>
+              <input
+                className={styles.input}
+                placeholder="https://example.com"
+                value={form.home_url}
+                onChange={(e) => setForm((f) => ({ ...f, home_url: e.target.value }))}
+                type="url"
+              />
+            </div>
+          </div>
+          <div className={styles.formFooter}>
+            <p className={styles.formHint}>
+              The RSS URL will be tested before saving. Find RSS feeds by searching "[source name] RSS feed".
+            </p>
+            <button
+              className={styles.addBtn}
+              onClick={handleAdd}
+              disabled={adding}
+            >
+              {adding ? "Checking URL…" : "Add source"}
+            </button>
+          </div>
+        </div>
+
+        {/* Source list */}
+        <div className={styles.sourceList}>
+          {sources.map((source) => (
+            <div key={source.id} className={styles.sourceRow}>
+              <div className={styles.sourceInfo}>
+                <div className={styles.sourceName}>{source.name}</div>
+                <a
+                  href={source.rss_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.sourceUrl}
+                >
+                  {source.rss_url.replace(/^https?:\/\//, "").slice(0, 55)}
+                  {source.rss_url.length > 62 ? "…" : ""}
+                </a>
+              </div>
+              <div className={styles.sourceMeta}>
+                <span className={styles.sourceLang}>{source.language}</span>
+                <span className={styles.sourceCount}>
+                  {source.article_count} articles
+                </span>
+                <button
+                  className={styles.deleteBtn}
+                  onClick={() => handleDelete(source.id, source.name)}
+                  disabled={deleting === source.id}
+                  aria-label={`Remove ${source.name}`}
+                >
+                  {deleting === source.id ? (
+                    <span className={styles.spinner} />
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 3.5h10M5.5 3.5V2.5h3V3.5M5 3.5l.5 8M9 3.5l-.5 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

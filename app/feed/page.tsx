@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase";
 import FeedClient from "@/components/feed/FeedClient";
 
-export const revalidate = 600;
+export const revalidate = 60;
 
 export default async function FeedPage() {
   const supabase = createClient();
