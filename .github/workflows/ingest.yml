@@ -1,19 +1,19 @@
-name: NewsMirror summarise
+name: NewsMirror ingest
 
 on:
   schedule:
-    # Summarise pending articles every 10 mins
-    - cron: '*/10 * * * *'
-  workflow_dispatch:
+    # Fetch new articles every 30 mins
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # allows manual trigger from GitHub UI
 
 jobs:
-  summarise:
+  ingest:
     runs-on: ubuntu-latest
     steps:
-      - name: Summarise pending articles
+      - name: Fetch new articles
         run: |
           curl -s -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=summarise" \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=ingest" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             --data '{}'
