@@ -14,6 +14,6 @@ jobs:
         run: |
           curl -s -X POST \
             "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=ingest" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0bnZrcmNnemJidXd1amFvemRrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDA4NjIxNywiZXhwIjoyMDg5NjYyMjE3fQ.yGgUh2bUQDyy2Arn37AVrJf9WrmDbhePjE3r_-Ckz_U }}" \
             -H "Content-Type: application/json" \
             --data '{}'
