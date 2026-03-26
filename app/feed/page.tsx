@@ -17,7 +17,8 @@ export default async function FeedPage() {
     `)
     .not("summary", "is", null)
     .neq("summary", "")
-    .order("published_at", { ascending: false })
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("ingested_at", { ascending: false })
     .limit(80);
 
   if (error) console.error("Feed fetch error:", error);
