@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styles from "./AdminSources.module.css";
 
 interface Source {
@@ -40,6 +40,15 @@ export default function AdminSources({ initialSources }: Props) {
     home_url: "",
     language: "en",
   });
+
+  // Ensure admin page is scrollable even when opened directly
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "auto";
+    return () => {
+      document.body.style.overflow = prev || "auto";
+    };
+  }, []);
 
   const flash = (msg: string, type: "success" | "error") => {
     if (type === "success") { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
