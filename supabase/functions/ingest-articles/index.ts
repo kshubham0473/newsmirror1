@@ -32,6 +32,13 @@ async function fetchRssFeed(rssUrl: string): Promise<RssItem[]> {
   return parseRss(xml);
 }
 
+function stripCdata(value: string): string {
+  return value
+    .replace(/^<!\[CDATA\[/i, "")
+    .replace(/]]>$/i, "")
+    .trim();
+}
+
 function parseRss(xml: string): RssItem[] {
   const items: RssItem[] = [];
 
@@ -40,15 +47,14 @@ function parseRss(xml: string): RssItem[] {
 
   for (const item of itemMatches) {
     const url = extractTag(item, "link") ?? extractTag(item, "guid");
-    const headline = decodeEntities(
-      extractTag(item, "title") ?? "Untitled"
-    );
-    const body = decodeEntities(
+    const rawTitle = extractTag(item, "title") ?? "Untitled";
+    const headline = decodeEntities(stripCdata(rawTitle));
+    const rawBody =
       extractCdata(item, "description") ??
-        extractTag(item, "description") ??
-        extractTag(item, "content:encoded") ??
-        ""
-    );
+      extractTag(item, "description") ??
+      extractTag(item, "content:encoded") ??
+      "";
+    const body = decodeEntities(stripCdata(rawBody));
     const image_url =
       extractAttr(item, "media:content", "url") ??
       extractTag(item, "media:thumbnail") ??
