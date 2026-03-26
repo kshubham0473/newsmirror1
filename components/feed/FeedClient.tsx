@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
@@ -19,6 +20,7 @@ type ViewMode = "cards" | "list";
 
 export default function FeedClient({ initialArticles }: Props) {
   const { prefs, loaded, completeOnboarding, save } = usePreferences();
+  const router = useRouter();
 
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
@@ -37,15 +39,21 @@ export default function FeedClient({ initialArticles }: Props) {
     } catch { /* ignore */ }
   }, []);
 
-  // Fix: toggle body overflow so list mode can scroll freely
+  // Toggle body overflow so list mode and other pages can scroll freely
   useEffect(() => {
     document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
-    return () => { document.body.style.overflow = "hidden"; };
+    return () => {
+      document.body.style.overflow = "auto";
+    };
   }, [viewMode]);
 
   const setView = (mode: ViewMode) => {
     setViewMode(mode);
     try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
+  };
+
+  const handleRefresh = () => {
+    router.refresh();
   };
 
   const allSources = useMemo(() => {
@@ -120,6 +128,7 @@ export default function FeedClient({ initialArticles }: Props) {
         viewMode={viewMode}
         onViewModeChange={setView}
         onSettingsClick={() => setShowOnboarding(true)}
+        onRefresh={handleRefresh}
       />
 
       <TopicFilter
