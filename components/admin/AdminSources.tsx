@@ -28,8 +28,9 @@ const LANGUAGES = [
 
 export default function AdminSources({ initialSources }: Props) {
   const [sources, setSources] = useState<Source[]>(initialSources);
-  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -45,36 +46,76 @@ export default function AdminSources({ initialSources }: Props) {
     else { setError(msg); setTimeout(() => setError(""), 5000); }
   };
 
-  const handleAdd = async () => {
+  const resetForm = () => {
+    setForm({ name: "", rss_url: "", home_url: "", language: "en" });
+    setEditingId(null);
+  };
+
+  const handleSubmit = async () => {
     if (!form.name || !form.rss_url || !form.home_url) {
       flash("All fields are required.", "error");
       return;
     }
-    setAdding(true);
+    setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/sources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        flash(data.error ?? "Failed to add source.", "error");
+      if (editingId) {
+        // Update existing source
+        const res = await fetch("/api/sources", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingId, ...form }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          flash(data.error ?? "Failed to update source.", "error");
+        } else {
+          setSources((prev) =>
+            prev
+              .map((s) =>
+                s.id === editingId ? { ...s, ...data } : s
+              )
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+          flash(`${data.name} updated successfully.`, "success");
+          resetForm();
+        }
       } else {
-        setSources((prev) =>
-          [...prev, { ...data, article_count: 0 }].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
-        );
-        setForm({ name: "", rss_url: "", home_url: "", language: "en" });
-        flash(`${data.name} added successfully.`, "success");
+        // Add new source
+        const res = await fetch("/api/sources", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          flash(data.error ?? "Failed to add source.", "error");
+        } else {
+          setSources((prev) =>
+            [...prev, { ...data, article_count: 0 }].sort((a, b) =>
+              a.name.localeCompare(b.name)
+            )
+          );
+          flash(`${data.name} added successfully.`, "success");
+          resetForm();
+        }
       }
     } catch {
       flash("Network error. Please try again.", "error");
     } finally {
-      setAdding(false);
+      setSaving(false);
     }
+  };
+
+  const handleEditClick = (source: Source) => {
+    setForm({
+      name: source.name,
+      rss_url: source.rss_url,
+      home_url: source.home_url,
+      language: source.language,
+    });
+    setEditingId(source.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -89,6 +130,9 @@ export default function AdminSources({ initialSources }: Props) {
       if (res.ok) {
         setSources((prev) => prev.filter((s) => s.id !== id));
         flash(`${name} removed.`, "success");
+        if (editingId === id) {
+          resetForm();
+        }
       } else {
         flash("Failed to remove source.", "error");
       }
@@ -120,9 +164,9 @@ export default function AdminSources({ initialSources }: Props) {
         {error && <div className={styles.toastError}>{error}</div>}
         {success && <div className={styles.toastSuccess}>{success}</div>}
 
-        {/* Add source form */}
+        {/* Add / edit source form */}
         <div className={styles.addCard}>
-          <h2 className={styles.addTitle}>Add new source</h2>
+          <h2 className={styles.addTitle}>{editingId ? "Edit source" : "Add new source"}</h2>
           <div className={styles.formGrid}>
             <div className={styles.field}>
               <label className={styles.label}>Source name</label>
@@ -170,13 +214,25 @@ export default function AdminSources({ initialSources }: Props) {
             <p className={styles.formHint}>
               The RSS URL will be tested before saving. Find RSS feeds by searching "[source name] RSS feed".
             </p>
-            <button
-              className={styles.addBtn}
-              onClick={handleAdd}
-              disabled={adding}
-            >
-              {adding ? "Checking URL…" : "Add source"}
-            </button>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {editingId && (
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={resetForm}
+                  style={{ background: "transparent", color: "var(--text-secondary)" }}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                className={styles.addBtn}
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving ? (editingId ? "Saving…" : "Checking URL…") : editingId ? "Save changes" : "Add source"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -201,6 +257,15 @@ export default function AdminSources({ initialSources }: Props) {
                 <span className={styles.sourceCount}>
                   {source.article_count} articles
                 </span>
+                <button
+                  className={styles.deleteBtn}
+                  onClick={() => handleEditClick(source)}
+                  aria-label={`Edit ${source.name}`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M3 11l2.5-.5L11 5l-2-2L3.5 8.5 3 11z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
                 <button
                   className={styles.deleteBtn}
                   onClick={() => handleDelete(source.id, source.name)}
