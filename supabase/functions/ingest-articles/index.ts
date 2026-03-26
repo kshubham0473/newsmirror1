@@ -58,7 +58,13 @@ function parseRss(xml: string): RssItem[] {
       extractTag(item, "pubDate") ?? extractTag(item, "dc:date") ?? null;
 
     if (url && headline) {
-      items.push({ url: url.trim(), headline, body: stripHtml(body), image_url, published_at });
+      items.push({
+        url: url.trim(),
+        headline,
+        body: stripHtml(body),
+        image_url,
+        published_at,
+      });
     }
   }
 
@@ -97,6 +103,73 @@ function decodeEntities(str: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&nbsp;/g, " ");
+}
+
+// ─── STAGE 1 CONTENT FILTER (BUILD 2D) ────────────────────────────────────────
+
+function isOlderThanHours(published_at: string | null, now: Date, hours: number) {
+  if (!published_at) return false;
+  const d = new Date(published_at);
+  if (isNaN(d.getTime())) return false;
+  const diffMs = now.getTime() - d.getTime();
+  return diffMs > hours * 60 * 60 * 1000;
+}
+
+function failsStageOneFilters(item: RssItem, now: Date): boolean {
+  const body = item.body.trim();
+  const headline = item.headline.trim();
+  const lowerBody = body.toLowerCase();
+  const lowerHeadline = headline.toLowerCase();
+
+  // R1: min body length (stubs, captions, tickers)
+  if (body.length < 80) return true;
+
+  // R2: max age 48h (archive resurfaces)
+  if (isOlderThanHours(item.published_at, now, 48)) return true;
+
+  // R3: non-editorial patterns (sponsored, horoscope, galleries, live blogs, quizzes)
+  const nonEditorialPatterns = [
+    "sponsored content",
+    "sponsored article",
+    "partnered content",
+    "advertorial",
+    "horoscope",
+    "zodiac",
+    "astrology",
+    "photo gallery",
+    "in pics",
+    "in pictures",
+    "slideshow",
+    "live blog",
+    "live updates",
+    "quiz:",
+  ];
+
+  if (
+    nonEditorialPatterns.some(
+      (p) => lowerHeadline.includes(p) || lowerBody.includes(p)
+    )
+  ) {
+    return true;
+  }
+
+  // R4: wire service reposts (PTI/ANI/IANS/Reuters/AFP/AP)
+  const upperBody = body.toUpperCase();
+  const upperHeadline = headline.toUpperCase();
+  const wirePrefixes = ["PTI", "ANI", "IANS", "REUTERS", "AFP", "AP "];
+  const isWire = wirePrefixes.some(
+    (prefix) =>
+      upperBody.startsWith(prefix + " ") ||
+      upperBody.startsWith(prefix + ":") ||
+      upperHeadline.startsWith(prefix + " ") ||
+      upperHeadline.startsWith(prefix + ":")
+  );
+  if (isWire) return true;
+
+  // R5: zombie articles – no published date at all
+  if (!item.published_at) return true;
+
+  return false;
 }
 
 // ─── GEMINI SUMMARISATION ─────────────────────────────────────────────────────
@@ -140,9 +213,18 @@ async function tagTopics(
   summary: string
 ): Promise<string[]> {
   const TOPICS = [
-    "politics", "economy", "judiciary", "foreign-policy",
-    "environment", "science-tech", "health", "sports",
-    "education", "society", "business", "defence",
+    "politics",
+    "economy",
+    "judiciary",
+    "foreign-policy",
+    "environment",
+    "science-tech",
+    "health",
+    "sports",
+    "education",
+    "society",
+    "business",
+    "defence",
   ];
 
   const prompt = `Given this Indian news headline and summary, return a JSON array of 1–3 topic tags from this list: ${TOPICS.join(", ")}.
@@ -177,16 +259,18 @@ Summary: ${summary}`;
 
 Deno.serve(async (_req) => {
   const results = { processed: 0, inserted: 0, skipped: 0, errors: 0 };
+  const now = new Date();
 
   try {
     // Fetch all active sources
     const { data: sources, error: sourcesErr } = await supabase
       .from("sources")
-      .select("id, name, rss_url, language");
+      .select("id, name, rss_url, language, active")
+      .eq("active", true);
 
     if (sourcesErr) throw sourcesErr;
     if (!sources?.length) {
-      return Response.json({ message: "No sources configured", results });
+      return Response.json({ message: "No active sources configured", results });
     }
 
     for (const source of sources) {
@@ -196,6 +280,12 @@ Deno.serve(async (_req) => {
 
         for (const item of items) {
           results.processed++;
+
+          // Stage 1 content filter (R1–R5)
+          if (failsStageOneFilters(item, now)) {
+            results.skipped++;
+            continue;
+          }
 
           // Check if article already exists
           const { data: existing } = await supabase
