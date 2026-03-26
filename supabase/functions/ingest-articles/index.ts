@@ -319,6 +319,14 @@ Deno.serve(async (_req) => {
             }
           }
 
+          let published_at: string | null = null;
+          if (item.published_at) {
+            const d = new Date(item.published_at);
+            if (!isNaN(d.getTime())) {
+              published_at = d.toISOString();
+            }
+          }
+
           const { error: insertErr } = await supabase.from("articles").insert({
             source_id: source.id,
             url: item.url,
@@ -326,9 +334,7 @@ Deno.serve(async (_req) => {
             body: item.body.slice(0, 8000), // cap stored body
             summary,
             image_url: item.image_url,
-            published_at: item.published_at
-              ? new Date(item.published_at).toISOString()
-              : null,
+            published_at,
             topic_tags,
           });
 
