@@ -15,6 +15,7 @@ interface Props {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onSettingsClick: () => void;
+  onRefresh: () => void;
 }
 
 export default function TopBar({
@@ -22,6 +23,7 @@ export default function TopBar({
   search, onSearchChange,
   viewMode, onViewModeChange,
   onSettingsClick,
+  onRefresh,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -123,6 +125,36 @@ export default function TopBar({
               </>
             )}
           </div>
+
+          {/* Refresh */}
+          <button
+            className={styles.iconBtn}
+            onClick={onRefresh}
+            aria-label="Refresh feed"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M3 4.5A5 5 0 0 1 13 8h-1.5M3 4.5V2M3 4.5h2.5M13 11.5A5 5 0 0 1 3 8h1.5M13 11.5V14M13 11.5h-2.5"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+
+          {/* Admin link */}
+          <a href="/admin" className={styles.iconBtn} aria-label="Admin sources">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M3 3.5h10M5 2h6M4 5v7.5a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 12 12.5V5"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </a>
 
           {/* Settings / preferences */}
           <button className={styles.iconBtn} onClick={onSettingsClick} aria-label="Preferences">
