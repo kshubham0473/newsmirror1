@@ -144,15 +144,10 @@ export default function TopBar({
           </button>
 
           {/* Admin link */}
-          <a href="/admin" className={styles.iconBtn} aria-label="Admin sources">
+          <a href="/admin" className={styles.iconBtn} aria-label="Manage sources">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M3 3.5h10M5 2h6M4 5v7.5a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 12 12.5V5"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M4 6h8M4 9h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
           </a>
 
