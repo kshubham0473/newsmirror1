@@ -2,8 +2,8 @@ name: NewsMirror summarise
 
 on:
   schedule:
-    # Summarise pending articles every 10 mins
-    - cron: '*/10 * * * *'
+    # Summarise pending articles every 3 hours
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 jobs:
