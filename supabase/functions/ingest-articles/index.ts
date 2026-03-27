@@ -1,6 +1,6 @@
 // supabase/functions/ingest-articles/index.ts
 // Deploy: supabase functions deploy ingest-articles
-// Schedule via Supabase Dashboard → Edge Functions → Schedules: "*/30 * * * *"
+// Schedule via Supabase Dashboard → Edge Functions → Schedules: "0 */5 * * *" (every 5 hours)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -46,22 +46,29 @@ function parseRss(xml: string): RssItem[] {
   const itemMatches = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
 
   for (const item of itemMatches) {
-    const url = extractTag(item, "link") ?? extractTag(item, "guid");
+    const rawLink = extractTag(item, "link") ?? extractTag(item, "guid");
+    const url = rawLink ? stripCdata(rawLink).trim() : null;
+
     const rawTitle = extractTag(item, "title") ?? "Untitled";
     const headline = decodeEntities(stripCdata(rawTitle));
+
     const rawBody =
       extractCdata(item, "description") ??
       extractTag(item, "description") ??
       extractTag(item, "content:encoded") ??
       "";
     const body = decodeEntities(stripCdata(rawBody));
+
     const image_url =
       extractAttr(item, "media:content", "url") ??
-      extractTag(item, "media:thumbnail") ??
+      extractAttr(item, "media:thumbnail", "url") ??
       extractEnclosureUrl(item) ??
+      extractFirstImageSrcFromHtml(rawBody) ??
       null;
-    const published_at =
+
+    const rawPublished =
       extractTag(item, "pubDate") ?? extractTag(item, "dc:date") ?? null;
+    const published_at = rawPublished ? stripCdata(rawPublished) : null;
 
     if (url && headline) {
       items.push({
@@ -93,8 +100,16 @@ function extractAttr(xml: string, tag: string, attr: string): string | null {
 }
 
 function extractEnclosureUrl(xml: string): string | null {
-  const re = /<enclosure[^>]*url="([^"]+)"[^>]*type="image/i;
-  return xml.match(re)?.[1] ?? null;
+  // Match <enclosure> where type starts with "image" and capture url, regardless of attribute order
+  const re1 = /<enclosure[^>]*type="image[^"]*"[^>]*url="([^"]+)"/i;
+  const re2 = /<enclosure[^>]*url="([^"]+)"[^>]*type="image[^"]*"/i;
+  const m = xml.match(re1) ?? xml.match(re2);
+  return m?.[1] ?? null;
+}
+
+function extractFirstImageSrcFromHtml(html: string): string | null {
+  const match = html.match(/<img[^>]+src="([^"]+)"/i);
+  return match?.[1] ?? null;
 }
 
 function stripHtml(html: string): string {
