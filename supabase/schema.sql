@@ -67,6 +67,7 @@ create table user_preferences (
 create table source_ideology_scores (
   id                    uuid primary key default gen_random_uuid(),
   source_id             uuid not null references sources(id) on delete cascade,
+  constraint source_ideology_scores_source_id_unique unique (source_id),
   scored_at             timestamptz not null default now(),
   identity_score        float not null,
   state_trust_score     float not null,
