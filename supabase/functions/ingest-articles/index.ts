@@ -276,9 +276,143 @@ Summary: ${summary}`;
   }
 }
 
-// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
+// ─── CLASSIFICATION (BUILD 3) ─────────────────────────────────────────────────
 
-Deno.serve(async (_req) => {
+interface ClassifierOutput {
+  identity_score: number | null;
+  state_trust_score: number | null;
+  economic_score: number | null;
+  institution_score: number | null;
+  rationale: {
+    identity: string;
+    state_trust: string;
+    economic: string;
+    institution: string;
+  };
+  unclassifiable: boolean;
+}
+
+const CLASSIFIER_PROMPT_TEMPLATE = `You are classifying an Indian news article across four editorial stance axes. 
+This is NOT about the events reported, but about HOW the outlet frames them.
+
+Score each axis from 0.0 to 1.0. Scores should be granular (e.g. 0.3, 0.65, 0.8) — avoid clustering at 0.5.
+If the article is genuinely neutral on an axis, use 0.5. Reserve 0.5 only for true neutrality.
+
+AXES:
+
+1. identity_score
+   0.0 = Frames all groups with equal weight, avoids majoritarian assumptions, uses neutral/plural language
+   1.0 = Frames issues primarily through a majority-community lens, minority groups treated as "other" or secondary
+   Example 0.2: Article on communal tension uses equal quotes from both communities, avoids loaded terms
+   Example 0.8: Same event described with language that implicitly centres Hindu nationalist framing
+
+2. state_trust_score
+   0.0 = Treats government claims with editorial scepticism, seeks independent verification, highlights opposition views
+   1.0 = Reproduces government statements as fact without challenge, minimal opposition or expert counter-voice
+   Example 0.1: Article on GDP growth questions methodology, cites independent economists
+   Example 0.9: Article on GDP growth reprints ministry press release with no additional voices
+
+3. economic_score
+   0.0 = Centres welfare impact, redistribution, labour rights, or inequality in framing economic stories
+   1.0 = Centres GDP growth, investor confidence, ease of doing business, market efficiency
+   Example 0.2: Coverage of a factory closure focuses on workers displaced, community impact
+   Example 0.8: Same story focuses on impact to sector FDI and government ease-of-business ranking
+
+4. institution_score
+   0.0 = Critical or questioning stance toward courts, RBI, Election Commission, press institutions
+   1.0 = Deferential toward institutional decisions, treats institutional authority as legitimate and final
+   Example 0.2: Article on Supreme Court verdict notes criticism from legal scholars
+   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices
+
+IMPORTANT:
+- Score the framing and editorial choices, NOT the facts reported
+- Many articles will be genuinely neutral on some axes — 0.5 is valid when warranted
+- Short or purely factual articles with no evident framing should return null for all scores
+- Return ONLY valid JSON, no explanation, no markdown
+
+Headline: {{headline}}
+Summary: {{summary}}
+Body (first 1500 chars): {{body}}
+
+Return this JSON and nothing else:
+{
+  "identity_score": 0.0,
+  "state_trust_score": 0.0,
+  "economic_score": 0.0,
+  "institution_score": 0.0,
+  "rationale": {
+    "identity": "one sentence",
+    "state_trust": "one sentence",
+    "economic": "one sentence",
+    "institution": "one sentence"
+  },
+  "unclassifiable": false
+}
+
+If the article is too short, purely factual, sports, or entertainment with no political framing,
+set "unclassifiable": true and all scores to null.`;
+
+async function classifyArticle(
+  headline: string,
+  summary: string,
+  body: string
+): Promise<ClassifierOutput> {
+  const prompt = CLASSIFIER_PROMPT_TEMPLATE
+    .replace("{{headline}}", headline)
+    .replace("{{summary}}", summary)
+    .replace("{{body}}", body.slice(0, 1500));
+
+  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 400 },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini classify error: ${err}`);
+  }
+
+  const data = await res.json();
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+
+  if (!raw) {
+    throw new Error("Empty classifier response");
+  }
+
+  let parsed: any;
+  try {
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error(`Failed to parse classifier JSON: ${(e as Error).message}`);
+  }
+
+  const unclassifiable = parsed.unclassifiable === true;
+
+  const output: ClassifierOutput = {
+    identity_score: unclassifiable ? null : parsed.identity_score ?? null,
+    state_trust_score: unclassifiable ? null : parsed.state_trust_score ?? null,
+    economic_score: unclassifiable ? null : parsed.economic_score ?? null,
+    institution_score: unclassifiable ? null : parsed.institution_score ?? null,
+    rationale: {
+      identity: parsed.rationale?.identity ?? "",
+      state_trust: parsed.rationale?.state_trust ?? "",
+      economic: parsed.rationale?.economic ?? "",
+      institution: parsed.rationale?.institution ?? "",
+    },
+    unclassifiable,
+  };
+
+  return output;
+}
+
+// ─── HANDLERS ────────────────────────────────────────────────────────────────
+
+async function handleIngest(): Promise<Response> {
   const results = { processed: 0, inserted: 0, skipped: 0, errors: 0 };
   const now = new Date();
 
@@ -313,7 +447,7 @@ Deno.serve(async (_req) => {
             .from("articles")
             .select("id")
             .eq("url", item.url)
-            .single();
+            .maybeSingle();
 
           if (existing) {
             results.skipped++;
@@ -329,7 +463,7 @@ Deno.serve(async (_req) => {
               summary = await summariseArticle(
                 item.headline,
                 item.body,
-                source.language
+                (source as any).language ?? "en"
               );
               if (summary) {
                 topic_tags = await tagTopics(item.headline, summary);
@@ -349,7 +483,7 @@ Deno.serve(async (_req) => {
           }
 
           const { error: insertErr } = await supabase.from("articles").insert({
-            source_id: source.id,
+            source_id: (source as any).id,
             url: item.url,
             headline: item.headline,
             body: item.body.slice(0, 8000), // cap stored body
@@ -361,7 +495,7 @@ Deno.serve(async (_req) => {
 
           if (insertErr) {
             // Unique constraint violation = already exists, safe to skip
-            if (insertErr.code === "23505") {
+            if ((insertErr as any).code === "23505") {
               results.skipped++;
             } else {
               console.error("Insert error:", insertErr);
@@ -375,7 +509,7 @@ Deno.serve(async (_req) => {
           await new Promise((r) => setTimeout(r, 300));
         }
       } catch (sourceErr) {
-        console.error(`Error processing source ${source.name}:`, sourceErr);
+        console.error(`Error processing source ${ (source as any).name }:", sourceErr);
         results.errors++;
       }
     }
@@ -386,4 +520,99 @@ Deno.serve(async (_req) => {
 
   console.log("Ingest complete:", results);
   return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
+async function handleClassify(): Promise<Response> {
+  const batchSize = 30;
+  const now = new Date();
+
+  const summary: any = {
+    requested: batchSize,
+    processed: 0,
+    classified: 0,
+    unclassifiable: 0,
+    errors: 0,
+  };
+
+  try {
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, source_id, headline, summary, body, published_at")
+      .is("identity_score", null)
+      .not("summary", "is", null)
+      .neq("summary", "")
+      .order("ingested_at", { ascending: true })
+      .limit(batchSize);
+
+    if (error) throw error;
+    if (!articles || articles.length === 0) {
+      return Response.json({
+        message: "No articles pending classification",
+        summary,
+      });
+    }
+
+    for (const article of articles) {
+      summary.processed++;
+      try {
+        const output = await classifyArticle(
+          (article as any).headline,
+          (article as any).summary,
+          (article as any).body ?? ""
+        );
+
+        const { error: updateErr } = await supabase
+          .from("articles")
+          .update({
+            identity_score: output.identity_score,
+            state_trust_score: output.state_trust_score,
+            economic_score: output.economic_score,
+            institution_score: output.institution_score,
+            classifier_rationale: output,
+          })
+          .eq("id", (article as any).id);
+
+        if (updateErr) {
+          console.error("Update error:", updateErr);
+          summary.errors++;
+        } else {
+          if (output.unclassifiable) {
+            summary.unclassifiable++;
+          } else {
+            summary.classified++;
+          }
+        }
+      } catch (e) {
+        console.error("Classification error:", e);
+        summary.errors++;
+      }
+
+      // Slight delay to avoid hammering Gemini
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // Refresh source_ideology_scores aggregation
+    try {
+      await supabase.rpc("refresh_source_ideology_scores");
+    } catch (aggErr) {
+      console.error("Aggregation error:", aggErr);
+    }
+  } catch (err) {
+    console.error("Fatal classify error:", err);
+    return Response.json({ error: String(err) }, { status: 500, summary });
+  }
+
+  return Response.json({ summary, timestamp: now.toISOString() });
+}
+
+// ─── ROUTER ───────────────────────────────────────────────────────────────────
+
+Deno.serve(async (req) => {
+  const url = new URL(req.url);
+  const phase = url.searchParams.get("phase") ?? "ingest";
+
+  if (phase === "ingest") return handleIngest();
+  if (phase === "classify") return handleClassify();
+
+  return Response.json({ error: "Unknown phase" }, { status: 400 });
 });
