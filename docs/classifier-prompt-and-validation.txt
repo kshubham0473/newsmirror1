@@ -1,0 +1,98 @@
+NewsMirror Classifier Prompt & Validation Notes
+==============================================
+
+This file tracks the **canonical Gemini classification prompt** and manual validation runs.
+
+Prompt (Build 3 Canonical)
+--------------------------
+
+You are classifying an Indian news article across four editorial stance axes. 
+This is NOT about the events reported, but about HOW the outlet frames them.
+
+Score each axis from 0.0 to 1.0. Scores should be granular (e.g. 0.3, 0.65, 0.8) — avoid clustering at 0.5.
+If the article is genuinely neutral on an axis, use 0.5. Reserve 0.5 only for true neutrality.
+
+AXES:
+
+1. identity_score
+   0.0 = Frames all groups with equal weight, avoids majoritarian assumptions, uses neutral/plural language
+   1.0 = Frames issues primarily through a majority-community lens, minority groups treated as "other" or secondary
+   Example 0.2: Article on communal tension uses equal quotes from both communities, avoids loaded terms
+   Example 0.8: Same event described with language that implicitly centres Hindu nationalist framing
+
+2. state_trust_score
+   0.0 = Treats government claims with editorial scepticism, seeks independent verification, highlights opposition views
+   1.0 = Reproduces government statements as fact without challenge, minimal opposition or expert counter-voice
+   Example 0.1: Article on GDP growth questions methodology, cites independent economists
+   Example 0.9: Article on GDP growth reprints ministry press release with no additional voices
+
+3. economic_score
+   0.0 = Centres welfare impact, redistribution, labour rights, or inequality in framing economic stories
+   1.0 = Centres GDP growth, investor confidence, ease of doing business, market efficiency
+   Example 0.2: Coverage of a factory closure focuses on workers displaced, community impact
+   Example 0.8: Same story focuses on impact to sector FDI and government ease-of-business ranking
+
+4. institution_score
+   0.0 = Critical or questioning stance toward courts, RBI, Election Commission, press institutions
+   1.0 = Deferential toward institutional decisions, treats institutional authority as legitimate and final
+   Example 0.2: Article on Supreme Court verdict notes criticism from legal scholars
+   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices
+
+IMPORTANT:
+- Score the framing and editorial choices, NOT the facts reported
+- Many articles will be genuinely neutral on some axes — 0.5 is valid when warranted
+- Short or purely factual articles with no evident framing should return null for all scores
+- Return ONLY valid JSON, no explanation, no markdown
+
+Headline: {{headline}}
+Summary: {{summary}}
+Body (first 1500 chars): {{body}}
+
+Return this JSON and nothing else:
+{
+  "identity_score": 0.0,
+  "state_trust_score": 0.0,
+  "economic_score": 0.0,
+  "institution_score": 0.0,
+  "rationale": {
+    "identity": "one sentence",
+    "state_trust": "one sentence",
+    "economic": "one sentence",
+    "institution": "one sentence"
+  },
+  "unclassifiable": false
+}
+
+If the article is too short, purely factual, sports, or entertainment with no political framing,
+set "unclassifiable": true and all scores to null.
+
+Manual Validation Runs (to be filled by Shubham)
+------------------------------------------------
+
+Use this section to paste representative classifier outputs from Gemini for 20–30 articles.
+
+For each sample, record:
+- Source (e.g. The Hindu, TOI, Mint, NDTV, Scroll, OpIndia)
+- URL or article ID
+- Raw JSON response from Gemini
+- Any observations about whether the scores "feel" right
+
+Example template (fill in manually):
+
+1. Source: The Hindu
+   Article ID: ...
+   JSON:
+   {
+     "identity_score": ...,
+     "state_trust_score": ...,
+     "economic_score": ...,
+     "institution_score": ...,
+     "rationale": {...},
+     "unclassifiable": false
+   }
+   Notes: ...
+
+2. Source: OpIndia
+   Article ID: ...
+   JSON: {...}
+   Notes: ...
