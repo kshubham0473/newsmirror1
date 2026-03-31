@@ -34,14 +34,15 @@ AXES:
 
 4. institution_score
    0.0 = Critical or questioning stance toward courts, RBI, Election Commission, press institutions
-   1.0 = Deferential toward institutional decisions, treats institutional authority as legitimate and final
+   1.0 = Deferential toward institutional decisions, treats institutional authority as legitimate and final. Use scores above 0.7 when the article praises these institutions, highlights their wisdom or integrity, or frames criticism as fringe/unreasonable.
    Example 0.2: Article on Supreme Court verdict notes criticism from legal scholars
-   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices
+   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices, and portrays the court as above reproach
 
 IMPORTANT:
 - Score the framing and editorial choices, NOT the facts reported
 - Many articles will be genuinely neutral on some axes — 0.5 is valid when warranted
 - Short or purely factual articles with no evident framing should return null for all scores
+- Articles that are motivational quotes, celebrity lifestyle, sports recaps, entertainment gossip, or non-political human-interest pieces should be treated as not political and marked unclassifiable.
 - Return ONLY valid JSON, no explanation, no markdown
 
 Headline: {{headline}}
@@ -63,7 +64,7 @@ Return this JSON and nothing else:
   "unclassifiable": false
 }
 
-If the article is too short, purely factual, sports, or entertainment with no political framing,
+If the article is too short, purely factual, sports, celebrity, lifestyle, motivational quote, entertainment, or other non-political human-interest with no political or institutional framing,
 set "unclassifiable": true and all scores to null.
 
 Manual Validation Runs (to be filled by Shubham)
