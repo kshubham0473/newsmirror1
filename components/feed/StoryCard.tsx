@@ -22,6 +22,50 @@ interface Props {
   total: number;
 }
 
+function getLeanMeta(article: Article):
+  | { label: string; strength: "low" | "high"; axis: "identity" | "state" | "economy" | "institutions" }
+  | null {
+  const { identity_score, state_trust_score, economic_score, institution_score } = article;
+
+  const scores: { axis: "identity" | "state" | "economy" | "institutions"; value: number | null }[] = [
+    { axis: "identity", value: identity_score },
+    { axis: "state", value: state_trust_score },
+    { axis: "economy", value: economic_score },
+    { axis: "institutions", value: institution_score },
+  ];
+
+  const withDiff = scores
+    .filter((s) => typeof s.value === "number")
+    .map((s) => ({ ...s, diff: Math.abs((s.value as number) - 0.5) }));
+
+  if (!withDiff.length) return null;
+
+  const dominant = withDiff.reduce((best, curr) => (curr.diff > best.diff ? curr : best));
+
+  // Ignore very small deviations from neutral
+  if (dominant.diff < 0.12) return null;
+
+  const strength: "low" | "high" = dominant.diff >= 0.25 ? "high" : "low";
+
+  let label = "";
+  switch (dominant.axis) {
+    case "identity":
+      label = "Identity framing";
+      break;
+    case "state":
+      label = "State narrative";
+      break;
+    case "economy":
+      label = "Economic framing";
+      break;
+    case "institutions":
+      label = "Institutional tone";
+      break;
+  }
+
+  return { label, strength, axis: dominant.axis };
+}
+
 export default function StoryCard({ article, isActive, position, total }: Props) {
   const [saved, setSaved] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
@@ -29,6 +73,7 @@ export default function StoryCard({ article, isActive, position, total }: Props)
   const sourceName = article.sources?.name ?? "Unknown";
   const age = timeAgo(article.published_at ?? article.ingested_at);
   const tag = article.topic_tags?.[0];
+  const leanMeta = getLeanMeta(article);
 
   return (
     <article
@@ -56,17 +101,32 @@ export default function StoryCard({ article, isActive, position, total }: Props)
         <div className={styles.topBar}>
           <div className={styles.metaPill}>
             <span className={styles.source}>{sourceName}</span>
+            {leanMeta && (
+              <span
+                className={`${styles.leanPill} ${styles[`leanPill_${leanMeta.axis}`]} ${styles[`leanPill_${leanMeta.strength}`]}`}
+                title={leanMeta.label}
+              >
+                <span className={styles.leanDot} aria-hidden />
+                <span className={styles.leanLabel}>{leanMeta.label}</span>
+              </span>
+            )}
             {tag && (
               <>
-                <span className={styles.metaDivider} aria-hidden>·</span>
+                <span className={styles.metaDivider} aria-hidden>
+                  ·
+                </span>
                 <span className={styles.tag}>{tag}</span>
               </>
             )}
           </div>
           <div className={styles.metaPill}>
             <span className={styles.age}>{age}</span>
-            <span className={styles.metaDivider} aria-hidden>·</span>
-            <span className={styles.counter}>{position}/{total}</span>
+            <span className={styles.metaDivider} aria-hidden>
+              ·
+            </span>
+            <span className={styles.counter}>
+              {position}/{total}
+            </span>
           </div>
         </div>
 
@@ -77,9 +137,7 @@ export default function StoryCard({ article, isActive, position, total }: Props)
         <div className={styles.body}>
           <h2 className={styles.headline}>{article.headline}</h2>
 
-          {article.summary && (
-            <p className={styles.summary}>{article.summary}</p>
-          )}
+          {article.summary && <p className={styles.summary}>{article.summary}</p>}
 
           {/* ── Actions ── */}
           <div className={styles.actions}>
@@ -91,7 +149,13 @@ export default function StoryCard({ article, isActive, position, total }: Props)
             >
               Read full story
               <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden>
-                <path d="M1 10L10 1M10 1H4M10 1V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M1 10L10 1M10 1H4M10 1V7"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </a>
 

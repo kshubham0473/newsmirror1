@@ -100,6 +100,55 @@
   color: var(--accent);
 }
 
+.leanPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.leanPill_identity {
+  border-color: rgba(252, 211, 77, 0.4);
+}
+
+.leanPill_state {
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.leanPill_economy {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.leanPill_institutions {
+  border-color: rgba(244, 114, 182, 0.4);
+}
+
+.leanPill_low {
+  opacity: 0.75;
+}
+
+.leanPill_high {
+  opacity: 1;
+}
+
+.leanDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.leanLabel {
+  white-space: nowrap;
+}
+
 .tag {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.65);
