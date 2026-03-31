@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "@/lib/supabase";
+import styles from "./Sources.module.css";
 
 export const revalidate = 300;
 
@@ -13,9 +14,9 @@ export default async function SourcesPage() {
 
   const { data: profiles } = await supabase
     .from("source_ideology_scores")
-    .select("source_id, article_sample_count, identity_score, state_trust_score, economic_score, institution_score");
+    .select("source_id, article_sample_count");
 
-  const profileMap = new Map<string, any>();
+  const profileMap = new Map<string, { article_sample_count: number }>();
   for (const row of profiles ?? []) {
     profileMap.set(row.source_id, row);
   }
@@ -26,62 +27,58 @@ export default async function SourcesPage() {
   }));
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-10 space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">NewsMirror</p>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Sources & editorial profiles</h1>
-        <p className="text-sm text-neutral-500 max-w-xl">
-          We read each outlet over the last 90 days and infer a soft profile of how it frames identity, the state,
-          the economy, and institutions. No raw scores are shown here; only relative tendencies.
-        </p>
-      </header>
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <a href="/feed" className={styles.backLink}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back to feed
+          </a>
+          <h1 className={styles.title}>Sources &amp; editorial profiles</h1>
+          <p className={styles.subtitle}>
+            We read each outlet over the last 90 days and infer a soft profile of how it frames
+            identity, the state, the economy, and institutions. No raw scores are shown — only
+            relative tendencies.
+          </p>
+        </header>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        {enriched.map((source) => {
-          const p = source.profile;
-          const ready = p && p.article_sample_count >= 10;
-          return (
-            <a
-              key={source.id}
-              href={`/sources/${source.id}`}
-              className="group rounded-2xl border border-neutral-800 bg-neutral-950/60 px-4 py-4 flex flex-col gap-3 hover:border-neutral-700 hover:bg-neutral-900/70 transition-colors"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="space-y-0.5">
-                  <div className="text-sm font-medium tracking-tight text-white flex items-center gap-1.5">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-semibold border border-neutral-700">
-                      {source.name.charAt(0).toUpperCase()}
-                    </span>
-                    <span>{source.name}</span>
+        <div className={styles.grid}>
+          {enriched.map((source) => {
+            const ready = source.profile && source.profile.article_sample_count >= 10;
+            return (
+              <a key={source.id} href={`/sources/${source.id}`} className={styles.card}>
+                <div className={styles.cardTop}>
+                  <div className={styles.avatar}>
+                    {source.name.charAt(0).toUpperCase()}
                   </div>
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-500">
-                    {source.language.toUpperCase()} · {ready ? "Profile ready" : "Profile building"}
-                  </p>
+                  <div className={styles.cardMeta}>
+                    <span className={styles.cardName}>{source.name}</span>
+                    <span className={styles.cardStatus}>
+                      <span className={styles.langPill}>{source.language.toUpperCase()}</span>
+                      {ready ? (
+                        <span className={styles.statusReady}>Profile ready</span>
+                      ) : (
+                        <span className={styles.statusBuilding}>Profile building</span>
+                      )}
+                    </span>
+                  </div>
+                  <svg className={styles.chevron} width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M5 2l5 5-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </div>
-                {ready && (
-                  <div className="flex items-center gap-1 text-[11px] text-neutral-400">
-                    <span className="inline-flex h-1.5 w-10 overflow-hidden rounded-full bg-neutral-800">
-                      <span className="h-full w-1/2 bg-amber-400/80 group-hover:bg-amber-300/90 transition-colors" />
-                    </span>
-                    <span>View stance</span>
-                  </div>
-                )}
-              </div>
 
-              {ready ? (
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Based on {p.article_sample_count} recent stories, this outlet shows a distinct editorial pattern across identity,
-                  the state, economy, and institutions.
+                <p className={styles.cardBody}>
+                  {ready
+                    ? `Based on ${source.profile!.article_sample_count} recent stories, this outlet has a distinct editorial pattern across identity, the state, economy, and institutions.`
+                    : "We\'re still reading this outlet. A profile appears once we have at least 10 representative articles."}
                 </p>
-              ) : (
-                <p className="text-xs text-neutral-500 leading-relaxed">
-                  We are still reading this outlet. A profile appears once we have at least 10 representative articles.
-                </p>
-              )}
-            </a>
-          );
-        })}
-      </section>
-    </main>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
