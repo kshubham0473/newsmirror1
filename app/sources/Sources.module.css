@@ -164,11 +164,11 @@
 .axisMiniLabel {
   font-size: 12px;
   font-weight: 500;
-  color: #a09b96; /* dark mode label */
+  color: #a09b96;
 }
 
-:global([data-theme="light"]) :local(.axisMiniLabel) {
-  color: #5a5652; /* light mode label */
+:global([data-theme="light"]) .axisMiniLabel {
+  color: #5a5652;
 }
 
 .axisTrack {
@@ -179,7 +179,7 @@
   overflow: visible;
 }
 
-:global([data-theme="light"]) :local(.axisTrack) {
+:global([data-theme="light"]) .axisTrack {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -194,7 +194,7 @@
   z-index: 1;
 }
 
-:global([data-theme="light"]) :local(.axisMidline) {
+:global([data-theme="light"]) .axisMidline {
   background: rgba(0, 0, 0, 0.2);
 }
 
@@ -210,12 +210,12 @@
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #6b6760; /* dark mode end labels */
+  color: #6b6760;
   line-height: 1;
 }
 
-:global([data-theme="light"]) :local(.axisEnds) {
-  color: #8a8682; /* light mode end labels */
+:global([data-theme="light"]) .axisEnds {
+  color: #8a8682;
 }
 
 /* ── Building progress bar ──────────────────────────────── */
