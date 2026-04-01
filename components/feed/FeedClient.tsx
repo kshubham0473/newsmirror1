@@ -13,6 +13,8 @@ import Onboarding from "../ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
 
+const LAST_SEEN_KEY = "nm_last_seen";
+
 interface Props {
   initialArticles: Article[];
 }
@@ -67,10 +69,18 @@ export default function FeedClient({ initialArticles }: Props) {
     setTimeout(() => setIsReloading(false), 900);
   }, [router]);
 
-  // Called when user taps the refresh icon in TopBar
+  // Refresh button: immediately reload the feed and stamp lastSeen,
+  // then re-check for any further new articles via the banner.
   const handleRefreshClick = useCallback(() => {
-    refreshBannerRef.current?.check();
-  }, []);
+    try {
+      localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
+    } catch {
+      /* ignore */
+    }
+    handleRefresh();
+    // After reload settles, re-check so banner shows only articles newer than now
+    setTimeout(() => refreshBannerRef.current?.check(), 1000);
+  }, [handleRefresh]);
 
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
