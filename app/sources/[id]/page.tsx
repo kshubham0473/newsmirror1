@@ -4,7 +4,7 @@ import { createServerClient } from '@/lib/supabase-server';
 import ScrollableLayout from '@/components/ui/ScrollableLayout';
 import styles from './SourceProfile.module.css';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────────────
 
 interface ClassifierRationale {
   identity?: string;
@@ -29,10 +29,10 @@ interface IdeologyScore {
   state_trust_score: number | null;
   economic_score: number | null;
   institution_score: number | null;
-  sample_size: number | null;
+  article_sample_count: number | null;
 }
 
-// ── Axis config ──────────────────────────────────────────────────────────────
+// ── Axis config ───────────────────────────────────────────────────────────────────
 
 const AXES = [
   {
@@ -65,7 +65,7 @@ const AXES = [
   },
 ] as const;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────────────
 
 function getAxisFill(score: number): { left: string; width: string; opacity: number } {
   const diff = score - 0.5;
@@ -89,7 +89,6 @@ function getStrengthLabel(
   return              { text: `Distinct tilt — ${dir.toLowerCase()}`, tier: 'distinct' };
 }
 
-// Pick articles that have at least 2 non-null rationale fields and a non-trivial score
 function pickRepresentativeArticles(articles: Article[]): Article[] {
   return articles
     .filter(a => {
@@ -100,7 +99,6 @@ function pickRepresentativeArticles(articles: Article[]): Article[] {
     .slice(0, 3);
 }
 
-// Which 2 axes are most pronounced in a given article?
 function dominantAxes(article: Article) {
   return AXES
     .map(ax => ({ ax, diff: Math.abs((article[ax.key] ?? 0.5) - 0.5) }))
@@ -110,14 +108,14 @@ function dominantAxes(article: Article) {
     .map(x => x.ax);
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ────────────────────────────────────────────────────────────────────────────
 
 export default async function SourceProfilePage({
   params,
 }: {
   params: { id: string };
 }) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   const { data: source } = await supabase
     .from('sources')
@@ -129,16 +127,15 @@ export default async function SourceProfilePage({
 
   const { data: ideology } = await supabase
     .from('source_ideology_scores')
-    .select('identity_score, state_trust_score, economic_score, institution_score, sample_size')
+    .select('identity_score, state_trust_score, economic_score, institution_score, article_sample_count')
     .eq('source_id', params.id)
     .single<IdeologyScore>();
 
   const hasProfile =
     ideology != null &&
-    ideology.sample_size != null &&
-    ideology.sample_size >= 10;
+    ideology.article_sample_count != null &&
+    ideology.article_sample_count >= 10;
 
-  // Representative articles — only if profile exists
   let repArticles: Article[] = [];
   if (hasProfile) {
     const { data: raw } = await supabase
@@ -159,14 +156,12 @@ export default async function SourceProfilePage({
     <ScrollableLayout>
     <main className={styles.page}>
 
-      {/* ── Back nav ── */}
       <div className={styles.nav}>
         <Link href="/sources" className={styles.back}>
           ‹ Sources
         </Link>
       </div>
 
-      {/* ── Source hero ── */}
       <div className={styles.hero}>
         <div className={styles.heroRow}>
           <div className={styles.avatar}>{source.name.charAt(0)}</div>
@@ -174,7 +169,7 @@ export default async function SourceProfilePage({
             <h1 className={styles.heroName}>{source.name}</h1>
             <div className={styles.heroSub}>
               {source.language.toUpperCase()}
-              {hasProfile && ` · Profile based on ${ideology!.sample_size} articles · Last 90 days`}
+              {hasProfile && ` · Profile based on ${ideology!.article_sample_count} articles · Last 90 days`}
             </div>
             <a
               href={source.home_url}
@@ -192,26 +187,24 @@ export default async function SourceProfilePage({
         </p>
       </div>
 
-      {/* ── Profile not ready ── */}
       {!hasProfile && (
         <div className={styles.buildingState}>
           <div className={styles.buildingTitle}>Profile building</div>
           <div className={styles.buildingDesc}>
             We need at least 10 classified articles to publish a profile.
-            {ideology?.sample_size != null && ideology.sample_size > 0
-              ? ` ${ideology.sample_size} classified so far.`
+            {ideology?.article_sample_count != null && ideology.article_sample_count > 0
+              ? ` ${ideology.article_sample_count} classified so far.`
               : ' Classification is in progress.'}
           </div>
           <div className={styles.progressTrack}>
             <div
               className={styles.progressFill}
-              style={{ width: `${Math.min(((ideology?.sample_size ?? 0) / 10) * 100, 100)}%` }}
+              style={{ width: `${Math.min(((ideology?.article_sample_count ?? 0) / 10) * 100, 100)}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* ── Axis profile ── */}
       {hasProfile && ideology && (
         <section className={styles.section}>
           <div className={styles.sectionLabel}>Editorial profile</div>
@@ -254,7 +247,6 @@ export default async function SourceProfilePage({
         </section>
       )}
 
-      {/* ── Representative articles ── */}
       {repArticles.length > 0 && (
         <section className={styles.section}>
           <div className={styles.sectionLabel}>Representative articles</div>
@@ -286,10 +278,9 @@ export default async function SourceProfilePage({
         </section>
       )}
 
-      {/* ── Methodology note ── */}
       <div className={styles.methodologyNote}>
         <p>
-          This profile is based on AI classification of {ideology?.sample_size ?? 0} articles
+          This profile is based on AI classification of {ideology?.article_sample_count ?? 0} articles
           published in the last 90 days. Scores reflect observed framing patterns and update
           as new articles are classified. They are not a measure of factual accuracy or
           journalistic quality.{' '}
