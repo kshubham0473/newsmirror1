@@ -96,3 +96,25 @@ img {
   clip: rect(0,0,0,0);
   white-space: nowrap;
 }
+
+/* ── Light mode ─────────────────────────────────────────────────────────────
+   Applied via data-theme="light" on <html>.
+   ThemeProvider sets this on mount from localStorage.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --bg:               #f5f1eb;
+  --surface:          #ece8e0;
+  --surface-2:        #e0dbd2;
+  --border:           rgba(0, 0, 0, 0.08);
+  --border-hover:     rgba(0, 0, 0, 0.16);
+  --text-primary:     #1a1916;
+  --text-secondary:   #6b6760;
+  --text-tertiary:    #9e9990;
+  --accent:           #c4611a;
+  --accent-dim:       rgba(196, 97, 26, 0.1);
+  --accent-glow:      rgba(196, 97, 26, 0.05);
+  --pill-bg:          rgba(0, 0, 0, 0.05);
+  --pill-active:      rgba(196, 97, 26, 0.12);
+  --pill-text-active: #c4611a;
+}

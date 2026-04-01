@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ThemeProvider } from "@/components/ui/ThemeProvider";
+// ...
+
 
 export const metadata: Metadata = {
   title: "NewsMirror",
@@ -22,7 +25,7 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  <ThemeProvider>{children}</ThemeProvider>: React.ReactNode;
 }) {
   return (
     <html lang="en">

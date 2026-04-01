@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createServerClient } from '@/lib/supabase-server';
+import ScrollableLayout from '@/components/ui/ScrollableLayout';
 import styles from './SourceProfile.module.css';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -155,6 +156,7 @@ export default async function SourceProfilePage({
   }
 
   return (
+    <ScrollableLayout>
     <main className={styles.page}>
 
       {/* ── Back nav ── */}
@@ -298,5 +300,6 @@ export default async function SourceProfilePage({
       </div>
 
     </main>
+    </ScrollableLayout>
   );
 }

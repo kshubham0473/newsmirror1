@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createServerClient } from '@/lib/supabase-server';
+import ScrollableLayout from '@/components/ui/ScrollableLayout';
 import styles from './Sources.module.css';
 
 interface SourceRow {
@@ -61,6 +62,7 @@ export default async function SourcesPage() {
   const building = enriched.filter(s => !s.ideology || (s.ideology.sample_size ?? 0) < 10);
 
   return (
+    <ScrollableLayout>
     <main className={styles.page}>
       <div className={styles.hero}>
         <h1 className={styles.heroTitle}>Source profiles</h1>
@@ -159,5 +161,6 @@ export default async function SourcesPage() {
         </Link>
       </div>
     </main>
+    </ScrollableLayout>
   );
 }

@@ -1,43 +1,82 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { useTheme } from "@/components/ui/ThemeProvider";
 import styles from "./TopBar.module.css";
 
-interface Source { id: string; name: string; }
 type ViewMode = "cards" | "list";
 
 interface Props {
-  sources: Source[];
-  activeSource: string | null;
-  onSourceChange: (id: string | null) => void;
   search: string;
   onSearchChange: (q: string) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onSettingsClick: () => void;
-  onRefresh: () => void;
+  isRefreshing: boolean;
 }
 
 export default function TopBar({
-  sources, activeSource, onSourceChange,
   search, onSearchChange,
   viewMode, onViewModeChange,
   onSettingsClick,
-  onRefresh,
+  isRefreshing,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sourceOpen, setSourceOpen] = useState(false);
-  const activeSourceName = sources.find((s) => s.id === activeSource)?.name;
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const { theme, toggle: toggleTheme } = useTheme();
+
+  // Close overflow when clicking outside
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setOverflowOpen(false);
+      }
+    }
+    if (overflowOpen) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [overflowOpen]);
 
   return (
     <header className={styles.bar}>
       <div className={styles.inner}>
+
+        {/* Left — identity */}
         <div className={styles.wordmark}>
           <span className={styles.logo}>NM</span>
           <span className={styles.name}>NewsMirror</span>
         </div>
 
+        {/* Centre — view toggle */}
+        <div className={styles.viewToggle}>
+          <button
+            className={`${styles.viewBtn} ${viewMode === "cards" ? styles.viewBtnActive : ""}`}
+            onClick={() => onViewModeChange("cards")}
+            aria-label="Card view"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <rect x="1" y="1" width="13" height="9" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M4 13h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <button
+            className={`${styles.viewBtn} ${viewMode === "list" ? styles.viewBtnActive : ""}`}
+            onClick={() => onViewModeChange("list")}
+            aria-label="List view"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M5 4h8M5 8h8M5 12h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <circle cx="2" cy="4" r="1" fill="currentColor"/>
+              <circle cx="2" cy="8" r="1" fill="currentColor"/>
+              <circle cx="2" cy="12" r="1" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Right — utilities */}
         <div className={styles.actions}>
+
           {/* Search */}
           {searchOpen ? (
             <div className={styles.searchWrap}>
@@ -69,95 +108,92 @@ export default function TopBar({
             </button>
           )}
 
-          {/* View toggle */}
-          <div className={styles.viewToggle}>
-            <button
-              className={`${styles.viewBtn} ${viewMode === "cards" ? styles.viewBtnActive : ""}`}
-              onClick={() => onViewModeChange("cards")}
-              aria-label="Card view"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-                <rect x="1" y="1" width="13" height="9" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M4 13h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-            </button>
-            <button
-              className={`${styles.viewBtn} ${viewMode === "list" ? styles.viewBtnActive : ""}`}
-              onClick={() => onViewModeChange("list")}
-              aria-label="List view"
-            >
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-                <path d="M5 4h8M5 8h8M5 12h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <circle cx="2" cy="4" r="1" fill="currentColor"/>
-                <circle cx="2" cy="8" r="1" fill="currentColor"/>
-                <circle cx="2" cy="12" r="1" fill="currentColor"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Source filter */}
-          <div className={styles.sourceWrap}>
-            <button
-              className={`${styles.sourceBtn} ${activeSource ? styles.sourceBtnActive : ""}`}
-              onClick={() => setSourceOpen((v) => !v)}
-            >
-              <span className={styles.sourceBtnText}>{activeSourceName ?? "All"}</span>
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M2 4L5 7L8 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            {sourceOpen && (
-              <>
-                <div className={styles.backdrop} onClick={() => setSourceOpen(false)} />
-                <div className={styles.sourceDropdown}>
-                  <button
-                    className={`${styles.sourceOption} ${!activeSource ? styles.sourceOptionActive : ""}`}
-                    onClick={() => { onSourceChange(null); setSourceOpen(false); }}
-                  >All sources</button>
-                  {sources.map((s) => (
-                    <button
-                      key={s.id}
-                      className={`${styles.sourceOption} ${activeSource === s.id ? styles.sourceOptionActive : ""}`}
-                      onClick={() => { onSourceChange(s.id); setSourceOpen(false); }}
-                    >{s.name}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Refresh */}
+          {/* Refresh indicator — spins while isRefreshing */}
           <button
-            className={styles.iconBtn}
-            onClick={onRefresh}
-            aria-label="Refresh feed"
+            className={`${styles.iconBtn} ${isRefreshing ? styles.iconBtnSpinning : ""}`}
+            aria-label="Checking for new stories"
+            disabled={isRefreshing}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
                 d="M3 4.5A5 5 0 0 1 13 8h-1.5M3 4.5V2M3 4.5h2.5M13 11.5A5 5 0 0 1 3 8h1.5M13 11.5V14M13 11.5h-2.5"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"
               />
             </svg>
           </button>
 
-          {/* Admin link */}
-          <a href="/admin" className={styles.iconBtn} aria-label="Manage sources">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M4 6h8M4 9h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-          </a>
-
-          {/* Settings / preferences */}
-          <button className={styles.iconBtn} onClick={onSettingsClick} aria-label="Preferences">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.54 11.54l1.41 1.41M3.05 12.95l1.42-1.42M11.54 4.46l1.41-1.41" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
+          {/* Theme toggle */}
+          <button
+            className={styles.iconBtn}
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                <circle cx="8" cy="8" r="2.8"/>
+                <line x1="8" y1="1.5" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="14.5"/>
+                <line x1="1.5" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="14.5" y2="8"/>
+                <line x1="3.3" y1="3.3" x2="4.4" y2="4.4"/><line x1="11.6" y1="11.6" x2="12.7" y2="12.7"/>
+                <line x1="12.7" y1="3.3" x2="11.6" y2="4.4"/><line x1="4.4" y1="11.6" x2="3.3" y2="12.7"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                <path d="M13.5 10A6 6 0 0 1 6 2.5a5.5 5.5 0 1 0 7.5 7.5z"/>
+              </svg>
+            )}
           </button>
+
+          {/* Overflow "…" — settings + admin + sources */}
+          <div className={styles.overflowWrap} ref={overflowRef}>
+            <button
+              className={`${styles.iconBtn} ${overflowOpen ? styles.iconBtnActive : ""}`}
+              onClick={() => setOverflowOpen((v) => !v)}
+              aria-label="More options"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="4" cy="8" r="1.2" fill="currentColor"/>
+                <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+                <circle cx="12" cy="8" r="1.2" fill="currentColor"/>
+              </svg>
+            </button>
+
+            {overflowOpen && (
+              <div className={styles.overflowMenu}>
+                <button
+                  className={styles.overflowItem}
+                  onClick={() => { onSettingsClick(); setOverflowOpen(false); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                    <circle cx="8" cy="8" r="2"/>
+                    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.54 11.54l1.41 1.41M3.05 12.95l1.42-1.42M11.54 4.46l1.41-1.41"/>
+                  </svg>
+                  Preferences
+                </button>
+                <Link
+                  href="/sources"
+                  className={styles.overflowItem}
+                  onClick={() => setOverflowOpen(false)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                    <rect x="2" y="3" width="12" height="9" rx="1.5"/>
+                    <path d="M4 6h8M4 9h5"/>
+                  </svg>
+                  Source profiles
+                </Link>
+                <Link
+                  href="/admin"
+                  className={styles.overflowItem}
+                  onClick={() => setOverflowOpen(false)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                    <path d="M8 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM2 14a6 6 0 0 1 12 0"/>
+                  </svg>
+                  Admin
+                </Link>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </header>

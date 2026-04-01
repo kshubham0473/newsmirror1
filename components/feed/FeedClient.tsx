@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
@@ -10,6 +10,7 @@ import CardFeed from "./CardFeed";
 import TopBar from "../ui/TopBar";
 import TopicFilter from "../ui/TopicFilter";
 import Onboarding from "../ui/Onboarding";
+import RefreshBanner from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
 type ViewMode = "cards" | "list";
 
 export default function FeedClient({ initialArticles }: Props) {
-  const { prefs, loaded, completeOnboarding, save } = usePreferences();
+  const { prefs, loaded, save } = usePreferences();
   const router = useRouter();
 
   const [search, setSearch] = useState("");
@@ -27,6 +28,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
@@ -39,12 +41,9 @@ export default function FeedClient({ initialArticles }: Props) {
     } catch { /* ignore */ }
   }, []);
 
-  // Toggle body overflow so list mode and other pages can scroll freely
   useEffect(() => {
     document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
+    return () => { document.body.style.overflow = "auto"; };
   }, [viewMode]);
 
   const setView = (mode: ViewMode) => {
@@ -52,9 +51,9 @@ export default function FeedClient({ initialArticles }: Props) {
     try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     router.refresh();
-  };
+  }, [router]);
 
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
@@ -66,7 +65,6 @@ export default function FeedClient({ initialArticles }: Props) {
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [initialArticles]);
 
-  // Inline filter overrides saved prefs; saved prefs are the default
   const effectiveSources = activeSource
     ? [activeSource]
     : prefs.sources.length > 0
@@ -95,20 +93,10 @@ export default function FeedClient({ initialArticles }: Props) {
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today = filtered.filter(
-    (a) => a.published_at && new Date(a.published_at) >= todayStart
-  );
-  const earlier = filtered.filter(
-    (a) => !a.published_at || new Date(a.published_at) < todayStart
-  );
+  const today   = filtered.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
+  const earlier = filtered.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
 
-  const handleOnboardingDone = ({
-    topics,
-    sources,
-  }: {
-    topics: TopicId[];
-    sources: string[];
-  }) => {
+  const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });
     setShowOnboarding(false);
   };
@@ -120,15 +108,12 @@ export default function FeedClient({ initialArticles }: Props) {
       )}
 
       <TopBar
-        sources={allSources}
-        activeSource={activeSource}
-        onSourceChange={setActiveSource}
         search={search}
         onSearchChange={setSearch}
         viewMode={viewMode}
         onViewModeChange={setView}
         onSettingsClick={() => setShowOnboarding(true)}
-        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
       />
 
       <TopicFilter
@@ -136,6 +121,14 @@ export default function FeedClient({ initialArticles }: Props) {
         active={activeTopic}
         onChange={(id) => setActiveTopic(id as TopicId | null)}
         savedTopics={prefs.topics}
+        sources={allSources}
+        activeSource={activeSource}
+        onSourceChange={setActiveSource}
+      />
+
+      <RefreshBanner
+        onRefresh={handleRefresh}
+        onCheckingChange={setIsRefreshing}
       />
 
       {viewMode === "cards" ? (
