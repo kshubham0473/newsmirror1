@@ -1,234 +1,302 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from "@/lib/supabase";
-import styles from "./SourceProfile.module.css";
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { createServerClient } from '@/lib/supabase-server';
+import styles from './SourceProfile.module.css';
 
-export const revalidate = 300;
+// ── Types ────────────────────────────────────────────────────────────────────
 
-interface Props {
-  params: { id: string };
+interface ClassifierRationale {
+  identity?: string;
+  state_trust?: string;
+  economic?: string;
+  institution?: string;
 }
+
+interface Article {
+  id: string;
+  headline: string;
+  summary: string;
+  classifier_rationale: ClassifierRationale | null;
+  identity_score: number | null;
+  state_trust_score: number | null;
+  economic_score: number | null;
+  institution_score: number | null;
+}
+
+interface IdeologyScore {
+  identity_score: number | null;
+  state_trust_score: number | null;
+  economic_score: number | null;
+  institution_score: number | null;
+  sample_size: number | null;
+}
+
+// ── Axis config ──────────────────────────────────────────────────────────────
 
 const AXES = [
   {
-    key: "identity_score",
-    label: "Identity framing",
-    description:
-      "How often coverage centres majority vs minority communities, and whether language is plural or majoritarian.",
+    key:      'identity_score'    as const,
+    label:    'Group framing',
+    lo:       'Pluralist',
+    hi:       'Majoritarian',
+    ratKey:   'identity'          as const,
   },
   {
-    key: "state_trust_score",
-    label: "State narrative",
-    description:
-      "Whether government claims are questioned or largely reproduced at face value, and how often opposition voices appear.",
+    key:      'state_trust_score' as const,
+    label:    'Govt coverage',
+    lo:       'Sceptical',
+    hi:       'Deferential',
+    ratKey:   'state_trust'       as const,
   },
   {
-    key: "economic_score",
-    label: "Economic framing",
-    description:
-      "Balance between growth and markets on one side, and labour, inequality, or welfare impact on the other.",
+    key:      'economic_score'    as const,
+    label:    'Economic lens',
+    lo:       'Welfare',
+    hi:       'Market',
+    ratKey:   'economic'          as const,
   },
   {
-    key: "institution_score",
-    label: "Institutional tone",
-    description:
-      "How courts, RBI, Election Commission and other watchdogs are described – deferential, neutral, or critical.",
+    key:      'institution_score' as const,
+    label:    'Institutions',
+    lo:       'Critical',
+    hi:       'Deferential',
+    ratKey:   'institution'       as const,
   },
 ] as const;
 
-function axisStrength(value: number | null | undefined): "Neutral" | "Subtle tilt" | "Distinct tilt" {
-  if (value == null) return "Neutral";
-  const diff = Math.abs(value - 0.5);
-  if (diff < 0.15) return "Neutral";
-  if (diff < 0.3) return "Subtle tilt";
-  return "Distinct tilt";
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function getAxisFill(score: number): { left: string; width: string; opacity: number } {
+  const diff = score - 0.5;
+  const pct  = Math.abs(diff) * 100;
+  const opacity = pct < 15 ? 0.45 : pct < 30 ? 0.7 : 0.92;
+  if (diff < 0) {
+    return { left: `${score * 100}%`, width: `${pct}%`, opacity };
+  }
+  return { left: '50%', width: `${pct}%`, opacity };
 }
 
-function barWidth(value: number | null | undefined): number {
-  if (value == null) return 30;
-  return Math.round(30 + Math.abs(value - 0.5) * 70);
+function getStrengthLabel(
+  score: number,
+  lo: string,
+  hi: string
+): { text: string; tier: 'neutral' | 'subtle' | 'distinct' } {
+  const diff = Math.abs(score - 0.5);
+  if (diff < 0.12) return { text: 'Broadly neutral',              tier: 'neutral'  };
+  const dir = score < 0.5 ? lo : hi;
+  if (diff < 0.30) return { text: `Subtle tilt — ${dir.toLowerCase()}`,   tier: 'subtle'   };
+  return              { text: `Distinct tilt — ${dir.toLowerCase()}`, tier: 'distinct' };
 }
 
-export default async function SourceProfilePage({ params }: Props) {
-  const supabase = createClient();
+// Pick articles that have at least 2 non-null rationale fields and a non-trivial score
+function pickRepresentativeArticles(articles: Article[]): Article[] {
+  return articles
+    .filter(a => {
+      if (!a.classifier_rationale) return false;
+      const fields = Object.values(a.classifier_rationale).filter(Boolean);
+      return fields.length >= 2;
+    })
+    .slice(0, 3);
+}
+
+// Which 2 axes are most pronounced in a given article?
+function dominantAxes(article: Article) {
+  return AXES
+    .map(ax => ({ ax, diff: Math.abs((article[ax.key] ?? 0.5) - 0.5) }))
+    .filter(x => x.diff > 0.12 && article.classifier_rationale?.[x.ax.ratKey])
+    .sort((a, b) => b.diff - a.diff)
+    .slice(0, 2)
+    .map(x => x.ax);
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function SourceProfilePage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const supabase = createServerClient();
 
   const { data: source } = await supabase
-    .from("sources")
-    .select("id, name, home_url, language, rss_url")
-    .eq("id", params.id)
-    .maybeSingle();
+    .from('sources')
+    .select('id, name, home_url, language')
+    .eq('id', params.id)
+    .single();
 
-  if (!source) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.container}>
-          <p className={styles.notFound}>Source not found.</p>
-        </div>
-      </div>
-    );
+  if (!source) notFound();
+
+  const { data: ideology } = await supabase
+    .from('source_ideology_scores')
+    .select('identity_score, state_trust_score, economic_score, institution_score, sample_size')
+    .eq('source_id', params.id)
+    .single<IdeologyScore>();
+
+  const hasProfile =
+    ideology != null &&
+    ideology.sample_size != null &&
+    ideology.sample_size >= 10;
+
+  // Representative articles — only if profile exists
+  let repArticles: Article[] = [];
+  if (hasProfile) {
+    const { data: raw } = await supabase
+      .from('articles')
+      .select(
+        'id, headline, summary, classifier_rationale, identity_score, state_trust_score, economic_score, institution_score'
+      )
+      .eq('source_id', params.id)
+      .not('identity_score', 'is', null)
+      .not('classifier_rationale', 'is', null)
+      .order('published_at', { ascending: false })
+      .limit(30);
+
+    repArticles = pickRepresentativeArticles((raw ?? []) as Article[]);
   }
 
-  const { data: profile } = await supabase
-    .from("source_ideology_scores")
-    .select("article_sample_count, identity_score, state_trust_score, economic_score, institution_score")
-    .eq("source_id", source.id)
-    .maybeSingle();
-
-  const { data: examples } = await supabase
-    .from("articles")
-    .select("id, url, headline, summary, classifier_rationale")
-    .eq("source_id", source.id)
-    .not("summary", "is", null)
-    .not("classifier_rationale", "is", null)
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(3);
-
-  const ready = profile && profile.article_sample_count >= 10;
-
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        {/* Header */}
-        <header className={styles.header}>
-          <a href="/sources" className={styles.backLink}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            All sources
-          </a>
+    <main className={styles.page}>
 
-          <div className={styles.sourceHeader}>
-            <div className={styles.avatar}>{source.name.charAt(0).toUpperCase()}</div>
-            <div className={styles.sourceHeaderMeta}>
-              <h1 className={styles.title}>{source.name}</h1>
-              <div className={styles.statusRow}>
-                <span className={styles.langPill}>{source.language.toUpperCase()}</span>
-                {ready ? (
-                  <span className={styles.statusReady}>Profile ready · {profile.article_sample_count} articles</span>
-                ) : (
-                  <span className={styles.statusBuilding}>Profile building</span>
-                )}
-              </div>
+      {/* ── Back nav ── */}
+      <div className={styles.nav}>
+        <Link href="/sources" className={styles.back}>
+          ‹ Sources
+        </Link>
+      </div>
+
+      {/* ── Source hero ── */}
+      <div className={styles.hero}>
+        <div className={styles.heroRow}>
+          <div className={styles.avatar}>{source.name.charAt(0)}</div>
+          <div className={styles.heroMeta}>
+            <h1 className={styles.heroName}>{source.name}</h1>
+            <div className={styles.heroSub}>
+              {source.language.toUpperCase()}
+              {hasProfile && ` · Profile based on ${ideology!.sample_size} articles · Last 90 days`}
             </div>
-            {source.home_url && (
-              <a
-                href={source.home_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.homepageLink}
-              >
-                Visit
-                <svg width="10" height="10" viewBox="0 0 11 11" fill="none" aria-hidden>
-                  <path d="M1 10L10 1M10 1H4M10 1V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </a>
-            )}
+            <a
+              href={source.home_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.visitLink}
+            >
+              Visit source ↗
+            </a>
           </div>
+        </div>
+        <p className={styles.disclaimerLine}>
+          Scores reflect editorial framing patterns, not factual accuracy.{' '}
+          <Link href="/methodology" className={styles.inlineLink}>How we classify →</Link>
+        </p>
+      </div>
 
-          <p className={styles.intro}>
-            We infer this profile from how {source.name} has covered stories in the last 90 days — focusing on
-            framing, emphasis, and editorial choices, not whether any single article is correct.
-          </p>
-        </header>
+      {/* ── Profile not ready ── */}
+      {!hasProfile && (
+        <div className={styles.buildingState}>
+          <div className={styles.buildingTitle}>Profile building</div>
+          <div className={styles.buildingDesc}>
+            We need at least 10 classified articles to publish a profile.
+            {ideology?.sample_size != null && ideology.sample_size > 0
+              ? ` ${ideology.sample_size} classified so far.`
+              : ' Classification is in progress.'}
+          </div>
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${Math.min(((ideology?.sample_size ?? 0) / 10) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-        {/* Axis cards */}
+      {/* ── Axis profile ── */}
+      {hasProfile && ideology && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Editorial dimensions</h2>
-          <div className={styles.axisGrid}>
-            {AXES.map((axis) => {
-              const rawValue = profile ? (profile as any)[axis.key] ?? null : null;
-              const strength = axisStrength(rawValue);
-              const width = barWidth(rawValue);
+          <div className={styles.sectionLabel}>Editorial profile</div>
+          <div className={styles.axesGrid}>
+            {AXES.map(axis => {
+              const score    = ideology[axis.key] ?? 0.5;
+              const fill     = getAxisFill(score);
+              const strength = getStrengthLabel(score, axis.lo, axis.hi);
               return (
                 <div key={axis.key} className={styles.axisCard}>
-                  <div className={styles.axisTop}>
-                    <div>
-                      <p className={styles.axisLabel}>{axis.label}</p>
-                      <p className={`${styles.axisStrength} ${
-                        strength === "Distinct tilt" ? styles.strengthDistinct
-                        : strength === "Subtle tilt" ? styles.strengthSubtle
-                        : styles.strengthNeutral
-                      }`}>
-                        {ready ? strength : "—"}
-                      </p>
-                    </div>
-                    <div className={styles.barWrap}>
-                      <div className={styles.barTrack}>
-                        <div className={styles.barFill} style={{ width: ready ? `${width}%` : "30%" }} />
-                      </div>
-                      <p className={styles.barCaption}>Relative editorial weight</p>
-                    </div>
+                  <div className={styles.axisName}>{axis.label}</div>
+
+                  <div className={styles.axisTrackWrap}>
+                    <div className={styles.axisMidline} />
+                    <div
+                      className={styles.axisFill}
+                      style={{
+                        left:    fill.left,
+                        width:   fill.width,
+                        opacity: fill.opacity,
+                      }}
+                    />
                   </div>
-                  <p className={styles.axisDesc}>{axis.description}</p>
+
+                  <div className={styles.axisEnds}>
+                    <span>{axis.lo}</span>
+                    <span>{axis.hi}</span>
+                  </div>
+
+                  <div
+                    className={styles.strengthLabel}
+                    data-tier={strength.tier}
+                  >
+                    {strength.text}
+                  </div>
                 </div>
               );
             })}
           </div>
         </section>
+      )}
 
-        {/* Representative stories */}
-        {examples && examples.length > 0 && (
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Representative recent stories</h2>
-            <p className={styles.sectionHint}>
-              A few of the stories the model examined when shaping this profile. Rationale snippets are
-              generated and show the framing the model is tracking — not verdicts on the article.
-            </p>
-            <div className={styles.exampleList}>
-              {examples.map((a: any) => (
-                <a
-                  key={a.id}
-                  href={a.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.exampleCard}
-                >
-                  <p className={styles.exampleHeadline}>{a.headline}</p>
-                  {a.summary && (
-                    <p className={styles.exampleSummary}>{a.summary}</p>
+      {/* ── Representative articles ── */}
+      {repArticles.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionLabel}>Representative articles</div>
+          <div className={styles.storyList}>
+            {repArticles.map(article => {
+              const axes = dominantAxes(article);
+              return (
+                <div key={article.id} className={styles.storyCard}>
+                  <div className={styles.storyHeadline}>{article.headline}</div>
+                  {article.summary && (
+                    <div className={styles.storySummary}>{article.summary}</div>
                   )}
-                  {a.classifier_rationale?.rationale && (
+                  {axes.length > 0 && (
                     <div className={styles.rationaleGrid}>
-                      {a.classifier_rationale.rationale.identity && (
-                        <p className={styles.rationaleItem}>
-                          <span className={styles.rationaleAxis}>Identity </span>
-                          {a.classifier_rationale.rationale.identity}
-                        </p>
-                      )}
-                      {a.classifier_rationale.rationale.state_trust && (
-                        <p className={styles.rationaleItem}>
-                          <span className={styles.rationaleAxis}>State </span>
-                          {a.classifier_rationale.rationale.state_trust}
-                        </p>
-                      )}
-                      {a.classifier_rationale.rationale.economic && (
-                        <p className={styles.rationaleItem}>
-                          <span className={styles.rationaleAxis}>Economy </span>
-                          {a.classifier_rationale.rationale.economic}
-                        </p>
-                      )}
-                      {a.classifier_rationale.rationale.institution && (
-                        <p className={styles.rationaleItem}>
-                          <span className={styles.rationaleAxis}>Institutions </span>
-                          {a.classifier_rationale.rationale.institution}
-                        </p>
-                      )}
+                      {axes.map(ax => (
+                        <div key={ax.key} className={styles.rationaleChip}>
+                          <div className={styles.rationaleChipLabel}>{ax.label}</div>
+                          <div className={styles.rationaleChipText}>
+                            {article.classifier_rationale?.[ax.ratKey]}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </a>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Methodology note */}
-        <section className={styles.methodNote}>
-          <p className={styles.methodText}>
-            We never label any outlet as &ldquo;good&rdquo; or &ldquo;bad&rdquo;. Instead, we look at framing choices
-            across many articles — which voices are quoted, what gets emphasised, and how often institutions are questioned
-            or praised. Raw model scores stay behind the scenes; what you see here is a softened, human-readable summary.
-          </p>
+                </div>
+              );
+            })}
+          </div>
         </section>
+      )}
+
+      {/* ── Methodology note ── */}
+      <div className={styles.methodologyNote}>
+        <p>
+          This profile is based on AI classification of {ideology?.sample_size ?? 0} articles
+          published in the last 90 days. Scores reflect observed framing patterns and update
+          as new articles are classified. They are not a measure of factual accuracy or
+          journalistic quality.{' '}
+          <Link href="/methodology" className={styles.inlineLink}>
+            Read our full methodology →
+          </Link>
+        </p>
       </div>
-    </div>
+
+    </main>
   );
 }
