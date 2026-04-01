@@ -59,11 +59,11 @@
   animation: feedProgress 1.4s ease-in-out infinite;
 }
 
-:global([data-theme="light"]) :local(.progressBar) {
+:global([data-theme="light"]) .progressBar {
   background: rgba(196, 97, 26, 0.1);
 }
 
-:global([data-theme="light"]) :local(.progressFill) {
+:global([data-theme="light"]) .progressFill {
   background: #c4611a;
 }
 
@@ -91,7 +91,7 @@
   background: #0f0f0f;
 }
 
-:global([data-theme="light"]) :local(.skeletonStack) {
+:global([data-theme="light"]) .skeletonStack {
   background: #f5f1eb;
 }
 
@@ -101,7 +101,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-:global([data-theme="light"]) :local(.skelCard) {
+:global([data-theme="light"]) .skelCard {
   background: rgba(0, 0, 0, 0.07);
 }
 
@@ -127,8 +127,8 @@
   width: 55%;
 }
 
-:global([data-theme="light"]) :local(.skelLine),
-:global([data-theme="light"]) :local(.skelLineShort) {
+:global([data-theme="light"]) .skelLine,
+:global([data-theme="light"]) .skelLineShort {
   background: rgba(0, 0, 0, 0.07);
 }
 
