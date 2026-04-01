@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
-// ...
-
 
 export const metadata: Metadata = {
   title: "NewsMirror",
@@ -25,7 +23,7 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: {
-  <ThemeProvider>{children}</ThemeProvider>: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
@@ -38,7 +36,9 @@ export default function RootLayout({
         />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body>{children}</body>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
