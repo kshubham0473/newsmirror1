@@ -30,11 +30,14 @@ const RefreshBanner = forwardRef<RefreshBannerHandle, RefreshBannerProps>(
         const supabase = createClient();
         const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
 
-        const query = supabase
+        // Build query — reassign so the .gt() chain is not discarded
+        let query = supabase
           .from('articles')
           .select('id', { count: 'exact', head: true });
 
-        if (lastSeen) query.gt('ingested_at', lastSeen);
+        if (lastSeen) {
+          query = query.gt('ingested_at', lastSeen);
+        }
 
         const { count } = await query;
 
