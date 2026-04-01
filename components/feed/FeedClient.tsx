@@ -29,6 +29,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
@@ -38,21 +39,33 @@ export default function FeedClient({ initialArticles }: Props) {
     try {
       const saved = localStorage.getItem("nm_view") as ViewMode | null;
       if (saved === "list" || saved === "cards") setViewMode(saved);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
     document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
-    return () => { document.body.style.overflow = "auto"; };
+    return () => {
+      document.body.style.overflow = "auto";
+    };
   }, [viewMode]);
 
   const setView = (mode: ViewMode) => {
     setViewMode(mode);
-    try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("nm_view", mode);
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleRefresh = useCallback(() => {
+    // Show a brief but clear loading state while the feed refreshes
+    setIsReloading(true);
     router.refresh();
+    // Fallback timer to clear the skeleton/progress if the refresh is very quick
+    setTimeout(() => setIsReloading(false), 900);
   }, [router]);
 
   const allSources = useMemo(() => {
@@ -75,17 +88,12 @@ export default function FeedClient({ initialArticles }: Props) {
     return initialArticles.filter((a) => {
       if (activeTopic && !a.topic_tags?.includes(activeTopic)) return false;
       if (!activeTopic && prefs.topics.length > 0) {
-        if (!a.topic_tags?.some((t) => prefs.topics.includes(t as TopicId)))
-          return false;
+        if (!a.topic_tags?.some((t) => prefs.topics.includes(t as TopicId))) return false;
       }
       if (effectiveSources && !effectiveSources.includes(a.source_id)) return false;
       if (search) {
         const q = search.toLowerCase();
-        if (
-          !a.headline.toLowerCase().includes(q) &&
-          !a.summary?.toLowerCase().includes(q)
-        )
-          return false;
+        if (!a.headline.toLowerCase().includes(q) && !a.summary?.toLowerCase().includes(q)) return false;
       }
       return true;
     });
@@ -93,16 +101,32 @@ export default function FeedClient({ initialArticles }: Props) {
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today   = filtered.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
-  const earlier = filtered.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
+  const today = filtered.filter(
+    (a) => a.published_at && new Date(a.published_at) >= todayStart
+  );
+  const earlier = filtered.filter(
+    (a) => !a.published_at || new Date(a.published_at) < todayStart
+  );
 
-  const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
+  const handleOnboardingDone = ({
+    topics,
+    sources,
+  }: {
+    topics: TopicId[];
+    sources: string[];
+  }) => {
     save({ topics, sources, onboardingDone: true });
     setShowOnboarding(false);
   };
 
+  const busy = isRefreshing || isReloading;
+
   return (
-    <div className={`${styles.shell} ${viewMode === "list" ? styles.listMode : ""}`}>
+    <div
+      className={`${styles.shell} ${
+        viewMode === "list" ? styles.listMode : ""
+      }`}
+    >
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
       )}
@@ -113,7 +137,7 @@ export default function FeedClient({ initialArticles }: Props) {
         viewMode={viewMode}
         onViewModeChange={setView}
         onSettingsClick={() => setShowOnboarding(true)}
-        isRefreshing={isRefreshing}
+        isRefreshing={busy}
       />
 
       <TopicFilter
@@ -126,12 +150,25 @@ export default function FeedClient({ initialArticles }: Props) {
         onSourceChange={setActiveSource}
       />
 
-      <RefreshBanner
-        onRefresh={handleRefresh}
-        onCheckingChange={setIsRefreshing}
-      />
+      {busy && (
+        <div className={styles.progressBar} aria-hidden>
+          <div className={styles.progressFill} />
+        </div>
+      )}
 
-      {viewMode === "cards" ? (
+      <RefreshBanner onRefresh={handleRefresh} onCheckingChange={setIsRefreshing} />
+
+      {busy ? (
+        <div className={styles.skeletonStack} aria-hidden>
+          <div className={styles.skelCard} />
+          <div className={styles.skelLines}>
+            <div className={styles.skelLine} />
+            <div className={styles.skelLineShort} />
+            <div className={styles.skelLine} />
+            <div className={styles.skelLineShort} />
+          </div>
+        </div>
+      ) : viewMode === "cards" ? (
         <CardFeed articles={filtered} />
       ) : (
         <main className={styles.listMain}>
@@ -160,7 +197,11 @@ export default function FeedClient({ initialArticles }: Props) {
                   <h2 className={styles.sectionLabel}>Earlier</h2>
                   <div className={styles.grid}>
                     {earlier.map((article) => (
-                      <ArticleCard key={article.id} article={article} featured={false} />
+                      <ArticleCard
+                        key={article.id}
+                        article={article}
+                        featured={false}
+                      />
                     ))}
                   </div>
                 </section>

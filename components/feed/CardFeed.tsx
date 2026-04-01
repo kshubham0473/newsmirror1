@@ -52,6 +52,9 @@ export default function CardFeed({ articles }: Props) {
 
   return (
     <div className={styles.wrap}>
+      {/* Light-mode gradient bridge between header and card image */}
+      <div className={styles.topFade} aria-hidden />
+
       {/* Progress dots */}
       <div className={styles.dots} aria-hidden>
         {articles.slice(0, 12).map((_, i) => (
@@ -72,7 +75,9 @@ export default function CardFeed({ articles }: Props) {
           <div
             key={article.id}
             className={styles.slide}
-            ref={(el) => { cardRefs.current[i] = el; }}
+            ref={(el) => {
+              cardRefs.current[i] = el;
+            }}
           >
             <StoryCard
               article={article}
@@ -88,7 +93,12 @@ export default function CardFeed({ articles }: Props) {
       {activeIndex === 0 && (
         <div className={styles.hint} aria-hidden>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path
+              d="M8 3v10M4 9l4 4 4-4"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
           </svg>
           <span>Scroll for next story</span>
         </div>

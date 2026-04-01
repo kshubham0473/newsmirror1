@@ -152,36 +152,50 @@
 .axisGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 16px;
+  gap: 12px 24px;
 }
 
 .axisMini {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .axisMiniLabel {
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  color: #a09b96; /* dark mode label */
+}
+
+:global([data-theme="light"]) :local(.axisMiniLabel) {
+  color: #5a5652; /* light mode label */
 }
 
 .axisTrack {
   position: relative;
-  height: 3px;
-  background: rgba(240, 236, 228, 0.08);
-  border-radius: 2px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
   overflow: visible;
+}
+
+:global([data-theme="light"]) :local(.axisTrack) {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .axisMidline {
   position: absolute;
-  top: -2px;
+  top: -3px;
   left: 50%;
-  width: 1px;
-  height: 7px;
-  background: rgba(240, 236, 228, 0.2);
+  width: 1.5px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateX(-50%);
   z-index: 1;
+}
+
+:global([data-theme="light"]) :local(.axisMidline) {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .axisFill {
@@ -189,15 +203,19 @@
   top: 0;
   height: 100%;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 .axisEnds {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  color: rgba(240, 236, 228, 0.2);
+  font-size: 11px;
+  color: #6b6760; /* dark mode end labels */
   line-height: 1;
+}
+
+:global([data-theme="light"]) :local(.axisEnds) {
+  color: #8a8682; /* light mode end labels */
 }
 
 /* ── Building progress bar ──────────────────────────────── */

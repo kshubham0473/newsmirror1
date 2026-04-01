@@ -45,3 +45,107 @@
   color: var(--text-tertiary);
   font-size: 14px;
 }
+
+/* ── Refresh progress bar under filters ─────────────────── */
+.progressBar {
+  height: 2px;
+  background: rgba(232, 132, 58, 0.15);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: #e8843a;
+  animation: feedProgress 1.4s ease-in-out infinite;
+}
+
+:global([data-theme="light"]) :local(.progressBar) {
+  background: rgba(196, 97, 26, 0.1);
+}
+
+:global([data-theme="light"]) :local(.progressFill) {
+  background: #c4611a;
+}
+
+@keyframes feedProgress {
+  0% {
+    width: 0;
+    margin-left: 0;
+  }
+  50% {
+    width: 60%;
+    margin-left: 20%;
+  }
+  100% {
+    width: 0;
+    margin-left: 100%;
+  }
+}
+
+/* ── Skeleton stack while checking/loading ──────────────── */
+.skeletonStack {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #0f0f0f;
+}
+
+:global([data-theme="light"]) :local(.skeletonStack) {
+  background: #f5f1eb;
+}
+
+.skelCard {
+  height: 140px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:global([data-theme="light"]) :local(.skelCard) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.skelLines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.skelLine,
+.skelLineShort {
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.skelLine {
+  width: 90%;
+}
+
+.skelLineShort {
+  width: 55%;
+}
+
+:global([data-theme="light"]) :local(.skelLine),
+:global([data-theme="light"]) :local(.skelLineShort) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+@keyframes feedShimmer {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.skelCard,
+.skelLine,
+.skelLineShort {
+  animation: feedShimmer 1.4s ease-in-out infinite;
+}
