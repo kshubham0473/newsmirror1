@@ -1,91 +1,93 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { createClient } from '@/lib/supabase';
 import styles from './RefreshBanner.module.css';
 
 const LAST_SEEN_KEY = 'nm_last_seen';
 
+export interface RefreshBannerHandle {
+  check: () => void;
+}
+
 interface RefreshBannerProps {
-  /** Called when user confirms load — parent should re-fetch articles */
   onRefresh: () => void;
-  /** Pass the setter so this component can expose its isChecking state to TopBar */
   onCheckingChange?: (checking: boolean) => void;
 }
 
-export default function RefreshBanner({ onRefresh, onCheckingChange }: RefreshBannerProps) {
-  const [newCount, setNewCount]     = useState<number | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
-  const [dismissed, setDismissed]   = useState(false);
+const RefreshBanner = forwardRef<RefreshBannerHandle, RefreshBannerProps>(
+  function RefreshBanner({ onRefresh, onCheckingChange }, ref) {
+    const [newCount, setNewCount]     = useState<number | null>(null);
+    const [isChecking, setIsChecking] = useState(false);
+    const [dismissed, setDismissed]   = useState(false);
 
-  const check = useCallback(async () => {
-    setIsChecking(true);
-    onCheckingChange?.(true);
+    const check = useCallback(async () => {
+      setIsChecking(true);
+      onCheckingChange?.(true);
+      setDismissed(false);
 
-    try {
-      const supabase   = createClient();
-      const lastSeen   = localStorage.getItem(LAST_SEEN_KEY);
+      try {
+        const supabase = createClient();
+        const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
 
-      const query = supabase
-        .from('articles')
-        .select('id', { count: 'exact', head: true });
+        const query = supabase
+          .from('articles')
+          .select('id', { count: 'exact', head: true });
 
-      if (lastSeen) {
-        query.gt('ingested_at', lastSeen);
+        if (lastSeen) query.gt('ingested_at', lastSeen);
+
+        const { count } = await query;
+
+        if (count && count > 0) {
+          setNewCount(count);
+        } else {
+          setNewCount(null);
+        }
+      } catch {
+        // Silent fail
+      } finally {
+        setIsChecking(false);
+        onCheckingChange?.(false);
       }
+    }, [onCheckingChange]);
 
-      const { count } = await query;
+    // Expose check() so parent can call it via ref
+    useImperativeHandle(ref, () => ({ check }), [check]);
 
-      if (count && count > 0) {
-        setNewCount(count);
-      }
-    } catch {
-      // Silent fail — refresh banner is non-critical
-    } finally {
-      setIsChecking(false);
-      onCheckingChange?.(false);
+    // Auto-check on mount
+    useEffect(() => {
+      check();
+    }, [check]);
+
+    function handleLoad() {
+      localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
+      setNewCount(null);
+      setDismissed(false);
+      onRefresh();
     }
-  }, [onCheckingChange]);
 
-  // Auto-check on mount
-  useEffect(() => {
-    check();
-  }, [check]);
+    function handleDismiss() {
+      setDismissed(true);
+    }
 
-  function handleLoad() {
-    localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
-    setNewCount(null);
-    setDismissed(false);
-    onRefresh();
-  }
+    if (dismissed || newCount === null) return null;
 
-  function handleDismiss() {
-    setDismissed(true);
-  }
-
-  if (dismissed || newCount === null) return null;
-
-  return (
-    <div className={styles.banner} role="status">
-      <span className={styles.text}>
-        ↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} available
-      </span>
-      <div className={styles.actions}>
-        <button className={styles.loadBtn} onClick={handleLoad}>
-          Load
-        </button>
-        <button className={styles.dismissBtn} onClick={handleDismiss} aria-label="Dismiss">
-          ✕
-        </button>
+    return (
+      <div className={styles.banner} role="status">
+        <span className={styles.text}>
+          ↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} available
+        </span>
+        <div className={styles.actions}>
+          <button className={styles.loadBtn} onClick={handleLoad}>Load</button>
+          <button className={styles.dismissBtn} onClick={handleDismiss} aria-label="Dismiss">✕</button>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+);
 
-/**
- * Spinner icon — export separately so TopBar can show it
- * while the check is in progress, replacing the static refresh icon.
- */
+export default RefreshBanner;
+
 export function RefreshSpinner() {
   return (
     <svg

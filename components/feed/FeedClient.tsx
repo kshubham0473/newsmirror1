@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
@@ -10,7 +10,7 @@ import CardFeed from "./CardFeed";
 import TopBar from "../ui/TopBar";
 import TopicFilter from "../ui/TopicFilter";
 import Onboarding from "../ui/Onboarding";
-import RefreshBanner from "@/components/ui/RefreshBanner";
+import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
 
 interface Props {
@@ -22,6 +22,7 @@ type ViewMode = "cards" | "list";
 export default function FeedClient({ initialArticles }: Props) {
   const { prefs, loaded, save } = usePreferences();
   const router = useRouter();
+  const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
@@ -61,12 +62,15 @@ export default function FeedClient({ initialArticles }: Props) {
   };
 
   const handleRefresh = useCallback(() => {
-    // Show a brief but clear loading state while the feed refreshes
     setIsReloading(true);
     router.refresh();
-    // Fallback timer to clear the skeleton/progress if the refresh is very quick
     setTimeout(() => setIsReloading(false), 900);
   }, [router]);
+
+  // Called when user taps the refresh icon in TopBar
+  const handleRefreshClick = useCallback(() => {
+    refreshBannerRef.current?.check();
+  }, []);
 
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
@@ -138,6 +142,7 @@ export default function FeedClient({ initialArticles }: Props) {
         onViewModeChange={setView}
         onSettingsClick={() => setShowOnboarding(true)}
         isRefreshing={busy}
+        onRefreshClick={handleRefreshClick}
       />
 
       <TopicFilter
@@ -156,7 +161,11 @@ export default function FeedClient({ initialArticles }: Props) {
         </div>
       )}
 
-      <RefreshBanner onRefresh={handleRefresh} onCheckingChange={setIsRefreshing} />
+      <RefreshBanner
+        ref={refreshBannerRef}
+        onRefresh={handleRefresh}
+        onCheckingChange={setIsRefreshing}
+      />
 
       {busy ? (
         <div className={styles.skeletonStack} aria-hidden>
