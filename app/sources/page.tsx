@@ -14,7 +14,7 @@ interface SourceRow {
     state_trust_score: number | null;
     economic_score: number | null;
     institution_score: number | null;
-    sample_size: number | null;
+    article_sample_count: number | null;
   } | null;
 }
 
@@ -37,7 +37,7 @@ function getAxisFill(score: number): { left: string; width: string; opacity: num
 }
 
 export default async function SourcesPage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   const { data: sources } = await supabase
     .from('sources')
@@ -47,7 +47,7 @@ export default async function SourcesPage() {
 
   const { data: ideologyRows } = await supabase
     .from('source_ideology_scores')
-    .select('source_id, identity_score, state_trust_score, economic_score, institution_score, sample_size');
+    .select('source_id, identity_score, state_trust_score, economic_score, institution_score, article_sample_count');
 
   const ideologyMap = new Map(
     (ideologyRows ?? []).map(r => [r.source_id, r])
@@ -58,8 +58,8 @@ export default async function SourcesPage() {
     ideology: ideologyMap.get(s.id) ?? null,
   }));
 
-  const ready    = enriched.filter(s => s.ideology?.sample_size != null && s.ideology.sample_size >= 10);
-  const building = enriched.filter(s => !s.ideology || (s.ideology.sample_size ?? 0) < 10);
+  const ready    = enriched.filter(s => s.ideology?.article_sample_count != null && s.ideology.article_sample_count >= 10);
+  const building = enriched.filter(s => !s.ideology || (s.ideology.article_sample_count ?? 0) < 10);
 
   return (
     <ScrollableLayout>
@@ -84,7 +84,7 @@ export default async function SourcesPage() {
                   <div className={styles.cardMeta}>
                     <div className={styles.cardName}>{source.name}</div>
                     <div className={styles.cardSub}>
-                      {source.language.toUpperCase()} · {source.ideology?.sample_size ?? 0} articles in profile
+                      {source.language.toUpperCase()} · {source.ideology?.article_sample_count ?? 0} articles in profile
                     </div>
                   </div>
                   <div className={styles.readyBadge}>Profile ready</div>
@@ -128,7 +128,7 @@ export default async function SourcesPage() {
           <div className={styles.sectionLabel}>Building profile</div>
           <div className={styles.list}>
             {building.map(source => {
-              const count = source.ideology?.sample_size ?? 0;
+              const count = source.ideology?.article_sample_count ?? 0;
               const pct   = Math.min((count / 10) * 100, 100);
               return (
                 <div key={source.id} className={`${styles.card} ${styles.cardBuilding}`}>
