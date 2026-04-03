@@ -93,7 +93,8 @@ export default function MethodologyPage() {
           </p>
           <p className={styles.body}>
             We never publish a source profile until at least 10 articles from that outlet have been classified in the
-            last 90 days. The source profile you see on the <code>/sources</code> page is a rolling 90-day average of
+            last 90 days. The source profile you see on the{' '}
+            <code className={styles.inlineCode}>/sources</code> page is a rolling 90-day average of
             those per-article scores, updated regularly as new coverage comes in.
           </p>
         </section>
