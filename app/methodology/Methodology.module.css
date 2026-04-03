@@ -1,0 +1,120 @@
+.page {
+  background: var(--bg);
+  min-height: 100vh;
+  padding-bottom: 72px;
+}
+
+.hero {
+  padding: 36px 20px 24px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+
+.lead {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 420px;
+}
+
+.section {
+  padding: 0 20px 20px;
+}
+
+.section + .section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  margin-bottom: 8px;
+  letter-spacing: -0.15px;
+  color: var(--text-primary);
+}
+
+.body,
+.bodySmall {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 640px;
+}
+
+.body + .body {
+  margin-top: 10px;
+}
+
+.bodySmall {
+  font-size: 13px;
+}
+
+.axisGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.axisBlock {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 0.5px solid var(--border);
+  padding: 10px 12px 12px;
+}
+
+.axisHeading {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.axisEnds {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.list {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.list li + li {
+  margin-top: 4px;
+}
+
+.emphasis {
+  font-weight: 500;
+}
+
+.footer {
+  padding: 20px;
+}
+
+.footerText {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  max-width: 640px;
+}
+
+code {
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}

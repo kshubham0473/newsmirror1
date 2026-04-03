@@ -1,6 +1,6 @@
 // supabase/functions/ingest-articles/index.ts
 // Deploy: supabase functions deploy ingest-articles
-// Schedule via Supabase Dashboard → Edge Functions → Schedules: "0 */5 * * *" (every 5 hours)
+// Schedule via GitHub Actions (see .github/workflows/ingest.yml): "0 */5 * * *" (every 5 hours)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -322,7 +322,7 @@ AXES:
    0.0 = Critical or questioning stance toward courts, RBI, Election Commission, press institutions
    1.0 = Deferential toward institutional decisions, treats institutional authority as legitimate and final. Use scores above 0.7 when the article praises these institutions, highlights their wisdom or integrity, or frames criticism as fringe/unreasonable.
    Example 0.2: Article on Supreme Court verdict notes criticism from legal scholars
-   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices, and portrays the court as above reproach
+   Example 0.9: Article on same verdict treats it as settled and authoritative, no critical voices
 
 IMPORTANT:
 - Score the framing and editorial choices, NOT the facts reported
@@ -510,7 +510,7 @@ async function handleIngest(): Promise<Response> {
           await new Promise((r) => setTimeout(r, 300));
         }
       } catch (sourceErr) {
-        console.error(`Error processing source ${ (source as any).name }:", sourceErr);
+        console.error(`Error processing source ${(source as any).name}:`, sourceErr);
         results.errors++;
       }
     }

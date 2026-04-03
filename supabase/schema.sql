@@ -11,6 +11,7 @@ create table sources (
   rss_url     text not null unique,
   home_url    text not null,
   language    text not null default 'en',       -- 'en', 'hi', 'mr', etc.
+  active      boolean not null default true,
   created_at  timestamptz not null default now()
 );
 
