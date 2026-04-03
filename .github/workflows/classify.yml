@@ -1,16 +1,51 @@
 name: NewsMirror classify
+
 on:
   schedule:
     - cron: '0 */2 * * *'   # every 2 hours
   workflow_dispatch:
+
 jobs:
   classify:
     runs-on: ubuntu-latest
     steps:
       - name: Classify pending articles
+        id: classify_call
         run: |
-          curl -s -X POST \
+          HTTP_STATUS=$(curl -s -o /tmp/classify_response.json -w "%{http_code}" -X POST \
             "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=classify" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
-            --data '{}'
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/classify_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Classify edge function returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Classify workflow failed — ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`;
+            const body = [
+              '**Workflow:** NewsMirror classify',
+              `**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              '',
+              'The classify edge function returned a non-2xx response or the curl call failed.',
+              '',
+              '**Checklist**',
+              '- [ ] Check Supabase Edge Function logs (`ingest-articles?phase=classify`)',
+              '- [ ] Verify Gemini API key is set and quota not exceeded',
+              '- [ ] Check `articles` table for unexpected schema changes',
+              '- [ ] See `docs/ops-runbook.md` for full triage steps',
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['ops', 'alert'],
+            });
