@@ -3,6 +3,9 @@ name: NewsMirror summarise (manual-only)
 on:
   workflow_dispatch:
 
+permissions:
+  issues: write
+
 jobs:
   summarise:
     runs-on: ubuntu-latest
