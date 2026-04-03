@@ -2,8 +2,8 @@ name: NewsMirror ingest
 
 on:
   schedule:
-    # Fetch new articles every 5 hours
-    - cron: '0 */5 * * *'
+    # Fetch new articles every 30 minutes
+    - cron: '*/30 * * * *'
   workflow_dispatch: # allows manual trigger from GitHub UI
 
 jobs:

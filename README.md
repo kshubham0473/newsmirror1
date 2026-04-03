@@ -62,7 +62,7 @@ supabase functions deploy ingest-articles
 ### 5. Schedule the cron (Supabase Dashboard)
 
 Go to **Edge Functions → ingest-articles → Schedules**
-Add schedule: `0 */5 * * *` (every 5 hours)
+Add schedule: `*/30 * * * *` (every 30 minutes)
 
 ### 6. Run locally
 

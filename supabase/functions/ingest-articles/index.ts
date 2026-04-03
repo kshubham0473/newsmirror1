@@ -1,6 +1,6 @@
 // supabase/functions/ingest-articles/index.ts
 // Deploy: supabase functions deploy ingest-articles
-// Schedule via GitHub Actions (see .github/workflows/ingest.yml): "0 */5 * * *" (every 5 hours)
+// Schedule via GitHub Actions (see .github/workflows/ingest.yml): "*/30 * * * *" (every 30 minutes)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
