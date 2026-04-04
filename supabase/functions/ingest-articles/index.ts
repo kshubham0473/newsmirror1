@@ -18,6 +18,11 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
+// How many sources to process per ingest run.
+// With 30+ sources at 30-min cadence, rotating 6 per run covers all sources
+// every ~2.5 hours while keeping each run well under the 150s Edge Function limit.
+const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "6");
+
 // ─── RSS PARSING ──────────────────────────────────────────────────────────────
 
 interface RssItem {
@@ -30,6 +35,7 @@ interface RssItem {
 
 async function fetchRssFeed(rssUrl: string): Promise<RssItem[]> {
   const res = await fetch(rssUrl, {
+    signal: AbortSignal.timeout(15_000), // 15s per source max
     headers: { "User-Agent": "NewsMirror/1.0 (RSS Reader)" },
   });
   if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} ${rssUrl}`);
@@ -161,7 +167,7 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
   const wirePrefixes = ["PTI", "ANI", "IANS", "REUTERS", "AFP", "AP "];
   if (wirePrefixes.some(
     (prefix) =>
-      upperBody.startsWith(prefix + " ") || upperBody.startsWith(prefix + ":") ||
+      upperBody.startsWith(prefix + " ") || upperBody.startsWith(prefix + ":")||
       upperHeadline.startsWith(prefix + " ") || upperHeadline.startsWith(prefix + ":")
   )) return true;
 
@@ -329,26 +335,58 @@ async function classifyArticle(headline: string, summary: string, body: string):
 // ─── HANDLER: INGEST (fast — no Gemini) ──────────────────────────────────────
 // Fetches RSS feeds and inserts raw articles. Summary/tags are filled by
 // ?phase=summarise which runs on a separate schedule.
+//
+// To avoid 504s on large source lists, we process SOURCES_PER_RUN sources per
+// invocation in a round-robin rotation keyed on the current UTC half-hour slot.
 
 async function handleIngest(): Promise<Response> {
-  const results = { processed: 0, inserted: 0, skipped: 0, errors: 0 };
+  const results = { processed: 0, inserted: 0, skipped: 0, errors: 0, sources_this_run: 0 };
   const now = new Date();
 
   try {
-    const { data: sources, error: sourcesErr } = await supabase
+    const { data: allSources, error: sourcesErr } = await supabase
       .from("sources")
       .select("id, name, rss_url, language, active")
-      .eq("active", true);
+      .eq("active", true)
+      .order("id", { ascending: true }); // stable ordering required for rotation
 
     if (sourcesErr) throw sourcesErr;
-    if (!sources?.length) {
+    if (!allSources?.length) {
       return Response.json({ message: "No active sources configured", results });
     }
+
+    // Round-robin: pick a slice of SOURCES_PER_RUN based on current 30-min slot.
+    // With 30 sources and 6 per run, every source is hit once every ~2.5 hours.
+    const slotIndex = Math.floor(now.getTime() / (30 * 60 * 1000)); // advances every 30 min
+    const offset = (slotIndex * SOURCES_PER_RUN) % allSources.length;
+    const sources = [
+      ...allSources.slice(offset, offset + SOURCES_PER_RUN),
+      // wrap around if slice goes past the end
+      ...allSources.slice(0, Math.max(0, offset + SOURCES_PER_RUN - allSources.length)),
+    ].slice(0, SOURCES_PER_RUN);
+
+    results.sources_this_run = sources.length;
+    console.log(`Processing ${sources.length}/${allSources.length} sources (slot ${slotIndex}, offset ${offset}):`, sources.map((s: any) => s.name));
 
     for (const source of sources) {
       try {
         console.log(`Fetching: ${source.name}`);
-        const items = await fetchRssFeed(source.rss_url);
+        const items = await fetchRssFeed((source as any).rss_url);
+
+        // ── Bulk dedup: fetch all existing URLs for this batch in one query ──
+        const candidateUrls = items
+          .filter((item) => !failsStageOneFilters(item, now))
+          .map((item) => item.url);
+
+        let existingUrls = new Set<string>();
+        if (candidateUrls.length > 0) {
+          const { data: existing } = await supabase
+            .from("articles")
+            .select("url")
+            .in("url", candidateUrls);
+          existingUrls = new Set((existing ?? []).map((r: any) => r.url));
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         for (const item of items) {
           results.processed++;
@@ -358,13 +396,7 @@ async function handleIngest(): Promise<Response> {
             continue;
           }
 
-          const { data: existing } = await supabase
-            .from("articles")
-            .select("id")
-            .eq("url", item.url)
-            .maybeSingle();
-
-          if (existing) {
+          if (existingUrls.has(item.url)) {
             results.skipped++;
             continue;
           }
@@ -375,7 +407,6 @@ async function handleIngest(): Promise<Response> {
             if (!isNaN(d.getTime())) published_at = d.toISOString();
           }
 
-          // Insert raw article — summary and topic_tags will be filled by summarise phase
           const { error: insertErr } = await supabase.from("articles").insert({
             source_id: (source as any).id,
             url: item.url,
@@ -413,8 +444,6 @@ async function handleIngest(): Promise<Response> {
 }
 
 // ─── HANDLER: SUMMARISE (Gemini — batched) ────────────────────────────────────
-// Processes articles that have no summary yet. Runs on its own schedule
-// (summarise.yml) so it never blocks ingest.
 
 async function handleSummarise(): Promise<Response> {
   const BATCH_SIZE = 15;
@@ -433,7 +462,6 @@ async function handleSummarise(): Promise<Response> {
       return Response.json({ message: "No articles pending summarisation", results });
     }
 
-    // Fetch source languages in one query
     const sourceIds = [...new Set(articles.map((a: any) => a.source_id))];
     const { data: sources } = await supabase
       .from("sources")
