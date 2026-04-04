@@ -19,9 +19,11 @@ const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 // How many sources to process per ingest run.
-// With 30+ sources at 30-min cadence, rotating 6 per run covers all sources
-// every ~2.5 hours while keeping each run well under the 150s Edge Function limit.
-const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "6");
+// Default 4: with 30+ sources at 30-min cadence, covers all sources every ~3.75 hours.
+// Each source RSS fetch has an 8s timeout; 4 sources = max 32s fetch time,
+// leaving ample headroom under Supabase's 150s Edge Function limit.
+// Override via INGEST_SOURCES_PER_RUN env var if needed.
+const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "4");
 
 // ─── RSS PARSING ──────────────────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ interface RssItem {
 
 async function fetchRssFeed(rssUrl: string): Promise<RssItem[]> {
   const res = await fetch(rssUrl, {
-    signal: AbortSignal.timeout(15_000), // 15s per source max
+    signal: AbortSignal.timeout(8_000), // 8s per source — tight enough to avoid 504 cascade
     headers: { "User-Agent": "NewsMirror/1.0 (RSS Reader)" },
   });
   if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} ${rssUrl}`);
@@ -336,8 +338,8 @@ async function classifyArticle(headline: string, summary: string, body: string):
 // Fetches RSS feeds and inserts raw articles. Summary/tags are filled by
 // ?phase=summarise which runs on a separate schedule.
 //
-// To avoid 504s on large source lists, we process SOURCES_PER_RUN sources per
-// invocation in a round-robin rotation keyed on the current UTC half-hour slot.
+// Processes SOURCES_PER_RUN sources per invocation in a round-robin rotation
+// keyed on the current UTC half-hour slot to stay well under the 150s limit.
 
 async function handleIngest(): Promise<Response> {
   const results = { processed: 0, inserted: 0, skipped: 0, errors: 0, sources_this_run: 0 };
@@ -356,12 +358,10 @@ async function handleIngest(): Promise<Response> {
     }
 
     // Round-robin: pick a slice of SOURCES_PER_RUN based on current 30-min slot.
-    // With 30 sources and 6 per run, every source is hit once every ~2.5 hours.
-    const slotIndex = Math.floor(now.getTime() / (30 * 60 * 1000)); // advances every 30 min
+    const slotIndex = Math.floor(now.getTime() / (30 * 60 * 1000));
     const offset = (slotIndex * SOURCES_PER_RUN) % allSources.length;
     const sources = [
       ...allSources.slice(offset, offset + SOURCES_PER_RUN),
-      // wrap around if slice goes past the end
       ...allSources.slice(0, Math.max(0, offset + SOURCES_PER_RUN - allSources.length)),
     ].slice(0, SOURCES_PER_RUN);
 
@@ -373,7 +373,7 @@ async function handleIngest(): Promise<Response> {
         console.log(`Fetching: ${source.name}`);
         const items = await fetchRssFeed((source as any).rss_url);
 
-        // ── Bulk dedup: fetch all existing URLs for this batch in one query ──
+        // Bulk dedup: fetch all existing URLs for this batch in one query
         const candidateUrls = items
           .filter((item) => !failsStageOneFilters(item, now))
           .map((item) => item.url);
@@ -386,7 +386,6 @@ async function handleIngest(): Promise<Response> {
             .in("url", candidateUrls);
           existingUrls = new Set((existing ?? []).map((r: any) => r.url));
         }
-        // ─────────────────────────────────────────────────────────────────────
 
         for (const item of items) {
           results.processed++;
