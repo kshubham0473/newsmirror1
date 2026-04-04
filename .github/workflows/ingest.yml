@@ -17,6 +17,7 @@ jobs:
         id: ingest_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/ingest_response.json -w "%{http_code}" -X POST \
+            --max-time 120 \
             "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=ingest" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
@@ -33,7 +34,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = `🚨 Ingest workflow failed — ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`;
+            const title = `\u{1F6A8} Ingest workflow failed \u2014 ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`;
             const body = [
               '**Workflow:** NewsMirror ingest',
               `**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
