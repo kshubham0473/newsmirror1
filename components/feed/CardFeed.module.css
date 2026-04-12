@@ -3,7 +3,7 @@
   height: calc(100dvh - 52px - 44px); /* subtract TopBar + TopicFilter */
 }
 
-/* Light-mode gradient bridge between warm header bg and card */
+/* Light-mode gradient bridge between warm header bg and full-bleed card image */
 .topFade {
   position: absolute;
   top: 0;

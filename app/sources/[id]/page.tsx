@@ -29,7 +29,7 @@ interface IdeologyScore {
   state_trust_score: number | null;
   economic_score: number | null;
   institution_score: number | null;
-  sample_size: number | null;
+  article_sample_count: number | null;
 }
 
 // ── Axis config ──────────────────────────────────────────────────────────────
@@ -129,14 +129,14 @@ export default async function SourceProfilePage({
 
   const { data: ideology } = await supabase
     .from('source_ideology_scores')
-    .select('identity_score, state_trust_score, economic_score, institution_score, sample_size')
+    .select('identity_score, state_trust_score, economic_score, institution_score, article_sample_count')
     .eq('source_id', params.id)
     .single<IdeologyScore>();
 
   const hasProfile =
     ideology != null &&
-    ideology.sample_size != null &&
-    ideology.sample_size >= 10;
+    ideology.article_sample_count != null &&
+    ideology.article_sample_count >= 10;
 
   // Representative articles — only if profile exists
   let repArticles: Article[] = [];
@@ -174,7 +174,7 @@ export default async function SourceProfilePage({
             <h1 className={styles.heroName}>{source.name}</h1>
             <div className={styles.heroSub}>
               {source.language.toUpperCase()}
-              {hasProfile && ` · Profile based on ${ideology!.sample_size} articles · Last 90 days`}
+              {hasProfile && ` · Profile based on ${ideology!.article_sample_count} articles · Last 90 days`}
             </div>
             <a
               href={source.home_url}
@@ -198,14 +198,14 @@ export default async function SourceProfilePage({
           <div className={styles.buildingTitle}>Profile building</div>
           <div className={styles.buildingDesc}>
             We need at least 10 classified articles to publish a profile.
-            {ideology?.sample_size != null && ideology.sample_size > 0
-              ? ` ${ideology.sample_size} classified so far.`
+            {ideology?.article_sample_count != null && ideology.article_sample_count > 0
+              ? ` ${ideology.article_sample_count} classified so far.`
               : ' Classification is in progress.'}
           </div>
           <div className={styles.progressTrack}>
             <div
               className={styles.progressFill}
-              style={{ width: `${Math.min(((ideology?.sample_size ?? 0) / 10) * 100, 100)}%` }}
+              style={{ width: `${Math.min(((ideology?.article_sample_count ?? 0) / 10) * 100, 100)}%` }}
             />
           </div>
         </div>
@@ -289,7 +289,7 @@ export default async function SourceProfilePage({
       {/* ── Methodology note ── */}
       <div className={styles.methodologyNote}>
         <p>
-          This profile is based on AI classification of {ideology?.sample_size ?? 0} articles
+          This profile is based on AI classification of {ideology?.article_sample_count ?? 0} articles
           published in the last 90 days. Scores reflect observed framing patterns and update
           as new articles are classified. They are not a measure of factual accuracy or
           journalistic quality.{' '}

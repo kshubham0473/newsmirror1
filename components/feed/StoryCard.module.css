@@ -16,11 +16,10 @@
   opacity: 1;
 }
 
-/* ── Background image — now 50% height, not full ──────────── */
+/* ── Background image ─────────────────────────────────────── */
 .imageBg {
   position: absolute;
-  inset: 0 0 auto 0;       /* top-anchored, height set below */
-  height: 52%;
+  inset: 0;
   z-index: 0;
 }
 
@@ -31,51 +30,53 @@
   object-position: center 20%;
 }
 
-/* Top overlay — dark fade for meta pill readability */
+/* Top overlay — subtle dark fade for meta readability */
 .overlayTop {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 100px;
+  height: 140px;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.65) 0%,
+    rgba(0, 0, 0, 0.72) 0%,
     rgba(0, 0, 0, 0) 100%
   );
 }
 
-/* Light mode — warm tint bridges header to image */
+/* Light mode variant — tint top overlay with warm background to bridge header and image */
 :global([data-theme="light"]) .overlayTop {
   background: linear-gradient(
     to bottom,
-    rgba(245, 241, 235, 0.55) 0%,
-    rgba(0, 0, 0, 0) 100%
+    rgba(245, 241, 235, 0.75) 0%,
+    rgba(0, 0, 0, 0) 40%
   );
 }
 
-/* Transition overlay — blends image into content area */
-.overlayTransition {
+/* Bottom overlay — strong fade for text readability */
+.overlayBottom {
   position: absolute;
+  bottom: 0;
   left: 0;
   right: 0;
-  top: 36%;
-  height: 20%;
+  height: 85%;
   background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--surface) 100%
+    to top,
+    rgba(6, 6, 6, 0.98) 0%,
+    rgba(6, 6, 6, 0.95) 25%,
+    rgba(6, 6, 6, 0.75) 50%,
+    rgba(6, 6, 6, 0.3) 70%,
+    rgba(6, 6, 6, 0) 100%
   );
-  z-index: 1;
 }
 
-/* ── Content layer — sits below image ────────────────────── */
+/* ── Content layer ────────────────────────────────────────── */
 .content {
   position: relative;
-  z-index: 2;
+  z-index: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
   padding: 0.85rem 1rem;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
@@ -101,19 +102,6 @@
   padding: 4px 10px;
 }
 
-/* Light mode pills need stronger contrast over image */
-:global([data-theme="light"]) .metaPill {
-  background: rgba(245, 241, 235, 0.85);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
-:global([data-theme="light"]) .age,
-:global([data-theme="light"]) .counter,
-:global([data-theme="light"]) .metaDivider,
-:global([data-theme="light"]) .tag {
-  color: var(--text-secondary);
-}
-
 .source {
   font-size: 11px;
   font-weight: 500;
@@ -136,12 +124,29 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.leanPill_identity   { border-color: rgba(252, 211, 77, 0.4); }
-.leanPill_state      { border-color: rgba(52, 211, 153, 0.4); }
-.leanPill_economy    { border-color: rgba(59, 130, 246, 0.4); }
-.leanPill_institutions { border-color: rgba(244, 114, 182, 0.4); }
-.leanPill_low        { opacity: 0.75; }
-.leanPill_high       { opacity: 1; }
+.leanPill_identity {
+  border-color: rgba(252, 211, 77, 0.4);
+}
+
+.leanPill_state {
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.leanPill_economy {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.leanPill_institutions {
+  border-color: rgba(244, 114, 182, 0.4);
+}
+
+.leanPill_low {
+  opacity: 0.75;
+}
+
+.leanPill_high {
+  opacity: 1;
+}
 
 .leanDot {
   width: 6px;
@@ -150,7 +155,9 @@
   background: currentColor;
 }
 
-.leanLabel { white-space: nowrap; }
+.leanLabel {
+  white-space: nowrap;
+}
 
 .tag {
   font-size: 10px;
@@ -174,44 +181,42 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Spacer — pushes body down past the image ────────────── */
+/* ── Spacer ───────────────────────────────────────────────── */
 .spacer {
-  flex: 0 0 48%;   /* matches image height so body starts just below it */
-  min-height: 0;
+  flex: 1;
+  min-height: 1rem;
 }
 
 /* ── Body ─────────────────────────────────────────────────── */
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  flex: 1;
-  min-height: 0;
+  gap: 0.75rem;
 }
 
 .headline {
   font-family: var(--font-display);
-  font-size: clamp(1.15rem, 3.5vw, 1.6rem);
+  font-size: clamp(1.25rem, 4vw, 1.75rem);
   font-weight: 600;
   line-height: 1.25;
-  color: var(--text-primary);
+  color: #ffffff;
   letter-spacing: -0.02em;
 }
 
-/* On top of image — override to white */
-.card.hasImage .headline {
+/* No image — use theme color instead of forced white */
+.card:not(.hasImage) .headline {
   color: var(--text-primary);
 }
 
 .summary {
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.7);
   display: block;
-  overflow: hidden;
-  /* Soft fade at bottom if summary is very long */
-  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.card:not(.hasImage) .summary {
+  color: var(--text-secondary);
 }
 
 /* ── Actions ──────────────────────────────────────────────── */
@@ -219,10 +224,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.75rem;
-  border-top: 0.5px solid var(--border);
-  margin-top: auto;
-  padding-bottom: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 0.15rem;
+}
+
+.card:not(.hasImage) .actions {
+  border-top-color: var(--border);
 }
 
 .readBtn {
@@ -237,7 +245,9 @@
   transition: opacity 0.15s;
 }
 
-.readBtn:hover { opacity: 0.75; }
+.readBtn:hover {
+  opacity: 0.75;
+}
 
 .saveBtn {
   width: 34px;
@@ -246,15 +256,15 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--text-tertiary);
-  background: var(--surface-2);
-  border: 0.5px solid var(--border);
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all 0.15s;
 }
 
 .saveBtn:hover {
-  color: var(--text-secondary);
-  background: var(--surface-2);
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .saveBtnActive {

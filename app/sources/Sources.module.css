@@ -60,7 +60,7 @@
 }
 
 .card:hover {
-  border-color: var(--border-hover);
+  border-color: var(--border-hover, rgba(240, 236, 228, 0.22));
 }
 
 .cardBuilding {
@@ -163,24 +163,24 @@
 
 .axisMiniLabel {
   font-size: 11px;
-  color: var(--text-secondary);    /* was text-tertiary — too dim */
+  color: var(--text-tertiary);
 }
 
 .axisTrack {
   position: relative;
-  height: 4px;
-  background: var(--border);       /* CSS var — works on both themes */
+  height: 3px;
+  background: var(--border);
   border-radius: 2px;
   overflow: visible;
 }
 
 .axisMidline {
   position: absolute;
-  top: -3px;
+  top: -2px;
   left: 50%;
   width: 1px;
-  height: 10px;
-  background: var(--border-hover); /* CSS var */
+  height: 7px;
+  background: var(--border-hover);
   z-index: 1;
 }
 
@@ -196,7 +196,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: var(--text-tertiary);     /* CSS var — was hardcoded rgba */
+  color: var(--text-tertiary);
   line-height: 1;
 }
 
@@ -226,13 +226,12 @@
 }
 
 .methodologyLink {
-  color: var(--accent);
-  opacity: 0.65;
+  color: rgba(232, 132, 58, 0.6);
   text-decoration: none;
 }
 
 .methodologyLink:hover {
-  opacity: 1;
+  color: var(--accent);
 }
 
 /* ── Sticky mini-header ─────────────────────────────────── */
@@ -247,9 +246,9 @@
   padding: 0 20px;
   height: 44px;
   background: var(--bg);
-  border-bottom: 0.5px solid var(--border);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .navBack {
@@ -267,5 +266,4 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-tertiary);
-  letter-spacing: 0.03em;
 }
