@@ -1,64 +1,166 @@
-.nav {
-  border-bottom: 1px solid var(--border);
+/* ── Row wrapper ────────────────────────────────────────── */
+
+.row {
+  display: flex;
+  align-items: center;
+  border-bottom: 0.5px solid var(--border);
   background: var(--bg);
   position: sticky;
-  top: 52px;
-  z-index: 40;
-  flex-shrink: 0;
+  top: 52px; /* height of TopBar */
+  z-index: 90;
+  gap: 0;
 }
 
-.track {
-  max-width: var(--max-w);
-  margin: 0 auto;
-  padding: 0.6rem var(--page-pad);
+/* ── Topic pills (scrollable) ───────────────────────────── */
+
+.pills {
   display: flex;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 6px;
   overflow-x: auto;
+  padding: 8px 16px 8px 16px;
+  flex: 1;
+  min-width: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.track::-webkit-scrollbar { display: none; }
+.pills::-webkit-scrollbar {
+  display: none;
+}
 
 .pill {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: none;
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   background: var(--pill-bg);
-  border: 1px solid transparent;
-  border-radius: 99px;
-  padding: 0.3rem 0.85rem;
+  cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
 .pill:hover {
-  color: var(--text-secondary);
-  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 .pillActive {
-  color: var(--pill-text-active);
   background: var(--pill-active);
-  border-color: rgba(232, 132, 58, 0.3);
-}
-
-/* Saved topic — subtle indicator without being active */
-.pillSaved {
-  color: var(--text-secondary);
-  border-color: rgba(232, 132, 58, 0.15);
+  color: var(--pill-text-active);
 }
 
 .savedDot {
-  width: 4px;
-  height: 4px;
+  display: inline-block;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  opacity: 0.6;
+  opacity: 0.7;
+}
+
+/* ── Source filter (pinned right) ───────────────────────── */
+
+.sourceWrap {
+  position: relative;
   flex-shrink: 0;
+  padding: 0 12px 0 0;
+  border-left: 0.5px solid var(--border);
+}
+
+.sourceBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  margin-left: 8px;
+  border-radius: 20px;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--pill-bg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sourceBtn:hover {
+  color: var(--text-primary);
+}
+
+.sourceBtnActive {
+  background: var(--pill-active);
+  color: var(--pill-text-active);
+}
+
+.sourceBtnText {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevronUp {
+  transform: rotate(180deg);
+}
+
+/* ── Source dropdown ────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 12px;
+  background: var(--surface);
+  border: 0.5px solid var(--border-hover);
+  border-radius: var(--r-md);
+  padding: 4px;
+  min-width: 160px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 160;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: fadeIn 0.1s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.option:hover {
+  background: var(--pill-bg);
+  color: var(--text-primary);
+}
+
+.optionActive {
+  color: var(--accent);
 }

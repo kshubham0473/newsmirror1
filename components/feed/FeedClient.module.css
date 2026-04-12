@@ -51,11 +51,12 @@
   height: 2px;
   background: rgba(232, 132, 58, 0.15);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .progressFill {
   height: 100%;
-  background: #e8843a;
+  background: var(--accent);
   animation: feedProgress 1.4s ease-in-out infinite;
 }
 
@@ -64,22 +65,13 @@
 }
 
 :global([data-theme="light"]) .progressFill {
-  background: #c4611a;
+  background: var(--accent);
 }
 
 @keyframes feedProgress {
-  0% {
-    width: 0;
-    margin-left: 0;
-  }
-  50% {
-    width: 60%;
-    margin-left: 20%;
-  }
-  100% {
-    width: 0;
-    margin-left: 100%;
-  }
+  0%   { width: 0;   margin-left: 0; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 0;   margin-left: 100%; }
 }
 
 /* ── Skeleton stack while checking/loading ──────────────── */
@@ -88,11 +80,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: #0f0f0f;
-}
-
-:global([data-theme="light"]) .skeletonStack {
-  background: #f5f1eb;
+  flex: 1;
+  background: var(--bg);
 }
 
 .skelCard {
@@ -119,13 +108,8 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-.skelLine {
-  width: 90%;
-}
-
-.skelLineShort {
-  width: 55%;
-}
+.skelLine      { width: 90%; }
+.skelLineShort { width: 55%; }
 
 :global([data-theme="light"]) .skelLine,
 :global([data-theme="light"]) .skelLineShort {
@@ -133,15 +117,9 @@
 }
 
 @keyframes feedShimmer {
-  0% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0.4;
-  }
+  0%   { opacity: 0.4; }
+  50%  { opacity: 0.9; }
+  100% { opacity: 0.4; }
 }
 
 .skelCard,

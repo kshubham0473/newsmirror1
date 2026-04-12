@@ -21,6 +21,40 @@ interface Props {
 
 type ViewMode = "cards" | "list";
 
+/**
+ * Round-robin topic diversity sort.
+ * Groups articles by their primary topic tag, then interleaves them so the
+ * feed cycles through topics rather than showing 8 politics stories in a row.
+ * Within each topic group articles stay in chronological (newest-first) order.
+ * Articles with no topic tag are appended at the end.
+ */
+function diversifyByTopic(articles: Article[]): Article[] {
+  const grouped = new Map<string, Article[]>();
+  const untagged: Article[] = [];
+
+  for (const article of articles) {
+    const tag = article.topic_tags?.[0];
+    if (!tag) {
+      untagged.push(article);
+      continue;
+    }
+    if (!grouped.has(tag)) grouped.set(tag, []);
+    grouped.get(tag)!.push(article);
+  }
+
+  // Interleave: take one from each group in rotation until all are consumed
+  const buckets = Array.from(grouped.values());
+  const result: Article[] = [];
+  let i = 0;
+  while (buckets.some((b) => b.length > 0)) {
+    const bucket = buckets[i % buckets.length];
+    if (bucket.length > 0) result.push(bucket.shift()!);
+    i++;
+  }
+
+  return [...result, ...untagged];
+}
+
 export default function FeedClient({ initialArticles }: Props) {
   const { prefs, loaded, save } = usePreferences();
   const router = useRouter();
@@ -42,25 +76,17 @@ export default function FeedClient({ initialArticles }: Props) {
     try {
       const saved = localStorage.getItem("nm_view") as ViewMode | null;
       if (saved === "list" || saved === "cards") setViewMode(saved);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
     document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
+    return () => { document.body.style.overflow = "auto"; };
   }, [viewMode]);
 
   const setView = (mode: ViewMode) => {
     setViewMode(mode);
-    try {
-      localStorage.setItem("nm_view", mode);
-    } catch {
-      /* ignore */
-    }
+    try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
   };
 
   const handleRefresh = useCallback(() => {
@@ -69,16 +95,11 @@ export default function FeedClient({ initialArticles }: Props) {
     setTimeout(() => setIsReloading(false), 900);
   }, [router]);
 
-  // Refresh button: immediately reload the feed and stamp lastSeen,
-  // then re-check for any further new articles via the banner.
   const handleRefreshClick = useCallback(() => {
     try {
       localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
     handleRefresh();
-    // After reload settles, re-check so banner shows only articles newer than now
     setTimeout(() => refreshBannerRef.current?.check(), 1000);
   }, [handleRefresh]);
 
@@ -99,7 +120,7 @@ export default function FeedClient({ initialArticles }: Props) {
     : null;
 
   const filtered = useMemo(() => {
-    return initialArticles.filter((a) => {
+    const base = initialArticles.filter((a) => {
       if (activeTopic && !a.topic_tags?.includes(activeTopic)) return false;
       if (!activeTopic && prefs.topics.length > 0) {
         if (!a.topic_tags?.some((t) => prefs.topics.includes(t as TopicId))) return false;
@@ -111,24 +132,17 @@ export default function FeedClient({ initialArticles }: Props) {
       }
       return true;
     });
+
+    // Apply topic diversity only when not already filtered to a single topic
+    return activeTopic ? base : diversifyByTopic(base);
   }, [initialArticles, activeTopic, prefs.topics, effectiveSources, search]);
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today = filtered.filter(
-    (a) => a.published_at && new Date(a.published_at) >= todayStart
-  );
-  const earlier = filtered.filter(
-    (a) => !a.published_at || new Date(a.published_at) < todayStart
-  );
+  const today   = filtered.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
+  const earlier = filtered.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
 
-  const handleOnboardingDone = ({
-    topics,
-    sources,
-  }: {
-    topics: TopicId[];
-    sources: string[];
-  }) => {
+  const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });
     setShowOnboarding(false);
   };
@@ -136,11 +150,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const busy = isRefreshing || isReloading;
 
   return (
-    <div
-      className={`${styles.shell} ${
-        viewMode === "list" ? styles.listMode : ""
-      }`}
-    >
+    <div className={`${styles.shell} ${viewMode === "list" ? styles.listMode : ""}`}>
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
       )}
@@ -216,11 +226,7 @@ export default function FeedClient({ initialArticles }: Props) {
                   <h2 className={styles.sectionLabel}>Earlier</h2>
                   <div className={styles.grid}>
                     {earlier.map((article) => (
-                      <ArticleCard
-                        key={article.id}
-                        article={article}
-                        featured={false}
-                      />
+                      <ArticleCard key={article.id} article={article} featured={false} />
                     ))}
                   </div>
                 </section>

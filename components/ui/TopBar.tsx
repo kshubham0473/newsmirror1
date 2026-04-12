@@ -14,7 +14,6 @@ interface Props {
   onViewModeChange: (mode: ViewMode) => void;
   onSettingsClick: () => void;
   isRefreshing: boolean;
-  onRefreshClick: () => void;
 }
 
 export default function TopBar({
@@ -22,13 +21,13 @@ export default function TopBar({
   viewMode, onViewModeChange,
   onSettingsClick,
   isRefreshing,
-  onRefreshClick,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const { theme, toggle: toggleTheme } = useTheme();
 
+  // Close overflow when clicking outside
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
@@ -109,12 +108,11 @@ export default function TopBar({
             </button>
           )}
 
-          {/* Refresh button — spins while checking, tappable to manually re-check */}
+          {/* Refresh indicator — spins while isRefreshing */}
           <button
             className={`${styles.iconBtn} ${isRefreshing ? styles.iconBtnSpinning : ""}`}
-            onClick={onRefreshClick}
+            aria-label="Checking for new stories"
             disabled={isRefreshing}
-            aria-label={isRefreshing ? "Checking for new stories…" : "Check for new stories"}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path

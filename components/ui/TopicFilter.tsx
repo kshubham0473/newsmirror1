@@ -1,80 +1,106 @@
 "use client";
 
-import { type Dispatch, type SetStateAction } from "react";
+import { useState } from "react";
 import styles from "./TopicFilter.module.css";
-import type { TopicId } from "@/lib/types";
 
-interface Topic { id: string; label: string; }
-interface Source { id: string; name: string; }
+interface Source {
+  id: string;
+  name: string;
+}
+
+interface Topic {
+  id: string;
+  label: string;
+}
 
 interface Props {
-  topics: readonly Topic[];
-  active: string | null;
-  onChange: (id: string | null) => void;
-  savedTopics?: TopicId[];
-  sources?: Source[];
-  activeSource?: string | null;
-  onSourceChange?: Dispatch<SetStateAction<string | null>>;
+  topics: Topic[];
+  activeTopic: string | null;
+  onTopicChange: (id: string | null) => void;
+  savedTopics?: string[];
+  sources: Source[];
+  activeSource: string | null;
+  onSourceChange: (id: string | null) => void;
 }
 
 export default function TopicFilter({
   topics,
-  active,
-  onChange,
+  activeTopic,
+  onTopicChange,
   savedTopics = [],
-  sources = [],
-  activeSource = null,
+  sources,
+  activeSource,
   onSourceChange,
 }: Props) {
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const activeSourceName = sources.find((s) => s.id === activeSource)?.name;
+
   return (
-    <nav className={styles.nav} aria-label="Filter by topic">
-      {/* Topic pills */}
-      <div className={styles.track}>
+    <div className={styles.row}>
+      {/* Topic pills — scrollable */}
+      <div className={styles.pills}>
         <button
-          className={`${styles.pill} ${!active ? styles.pillActive : ""}`}
-          onClick={() => onChange(null)}
+          className={`${styles.pill} ${!activeTopic ? styles.pillActive : ""}`}
+          onClick={() => onTopicChange(null)}
         >
           All
         </button>
-        {topics.map((t) => {
-          const isSaved = savedTopics.includes(t.id as TopicId);
-          const isActive = active === t.id;
-          return (
-            <button
-              key={t.id}
-              className={`${styles.pill} ${isActive ? styles.pillActive : ""} ${isSaved && !isActive ? styles.pillSaved : ""}`}
-              onClick={() => onChange(isActive ? null : t.id)}
-            >
-              {t.label}
-              {isSaved && !isActive && <span className={styles.savedDot} aria-hidden />}
-            </button>
-          );
-        })}
+        {topics.map((t) => (
+          <button
+            key={t.id}
+            className={`${styles.pill} ${activeTopic === t.id ? styles.pillActive : ""}`}
+            onClick={() => onTopicChange(t.id)}
+          >
+            {t.label}
+            {savedTopics.includes(t.id) && (
+              <span className={styles.savedDot} aria-hidden="true" />
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Source filter row — only rendered when sources are provided */}
-      {sources.length > 0 && onSourceChange && (
-        <div className={styles.track}>
-          <button
-            className={`${styles.pill} ${!activeSource ? styles.pillActive : ""}`}
-            onClick={() => onSourceChange(null)}
+      {/* Source filter — pinned right */}
+      <div className={styles.sourceWrap}>
+        <button
+          className={`${styles.sourceBtn} ${activeSource ? styles.sourceBtnActive : ""}`}
+          onClick={() => setSourceOpen((v) => !v)}
+          aria-label="Filter by source"
+          aria-expanded={sourceOpen}
+        >
+          <span className={styles.sourceBtnText}>
+            {activeSourceName ?? "All sources"}
+          </span>
+          <svg
+            width="10" height="10" viewBox="0 0 10 10" fill="none"
+            className={sourceOpen ? styles.chevronUp : ""}
           >
-            All sources
-          </button>
-          {sources.map((s) => {
-            const isActive = activeSource === s.id;
-            return (
+            <path d="M2 4L5 7L8 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+
+        {sourceOpen && (
+          <>
+            <div className={styles.backdrop} onClick={() => setSourceOpen(false)} />
+            <div className={styles.dropdown}>
               <button
-                key={s.id}
-                className={`${styles.pill} ${isActive ? styles.pillActive : ""}`}
-                onClick={() => onSourceChange(isActive ? null : s.id)}
+                className={`${styles.option} ${!activeSource ? styles.optionActive : ""}`}
+                onClick={() => { onSourceChange(null); setSourceOpen(false); }}
               >
-                {s.name}
+                All sources
               </button>
-            );
-          })}
-        </div>
-      )}
-    </nav>
+              {sources.map((s) => (
+                <button
+                  key={s.id}
+                  className={`${styles.option} ${activeSource === s.id ? styles.optionActive : ""}`}
+                  onClick={() => { onSourceChange(s.id); setSourceOpen(false); }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

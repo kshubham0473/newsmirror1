@@ -18,11 +18,6 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
-// How many sources to process per ingest run.
-// Default 4: with 30+ sources at 30-min cadence, covers all sources every ~3.75 hours.
-// Each source RSS fetch has an 8s timeout; 4 sources = max 32s fetch time,
-// leaving ample headroom under Supabase's 150s Edge Function limit.
-// Override via INGEST_SOURCES_PER_RUN env var if needed.
 const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "4");
 
 // ─── RSS PARSING ──────────────────────────────────────────────────────────────
@@ -37,7 +32,7 @@ interface RssItem {
 
 async function fetchRssFeed(rssUrl: string): Promise<RssItem[]> {
   const res = await fetch(rssUrl, {
-    signal: AbortSignal.timeout(8_000), // 8s per source — tight enough to avoid 504 cascade
+    signal: AbortSignal.timeout(8_000),
     headers: { "User-Agent": "NewsMirror/1.0 (RSS Reader)" },
   });
   if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} ${rssUrl}`);
@@ -179,8 +174,25 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
 // ─── GEMINI HELPERS ───────────────────────────────────────────────────────────
 
 async function summariseArticle(headline: string, body: string, language: string): Promise<string> {
-  const langNote = language !== "en" ? `The article may be in ${language}. Respond in English.` : "";
-  const prompt = `Summarise this Indian news article in exactly 2–3 sentences. Be factual, neutral, and concise. Capture the key who, what, and why. Do not include opinions or commentary. Return only the summary text, no preamble. ${langNote}
+  const langNote = language !== "en" ? `The article may be in ${language}. Respond in English regardless.` : "";
+
+  // Build 5 — updated prompt targeting 80-100 words covering the full story
+  const prompt = `Summarise this Indian news article in 80–100 words. Write for a reader who will not click through to the full story — give them everything they need to understand the event completely.
+
+Structure your summary to cover:
+1. What happened (the core event, specific and concrete)
+2. Who is involved and what their role is
+3. Why it happened or what caused it
+4. Why it matters or what the consequence is
+5. What happens next (if known from the article)
+
+Rules:
+- Be factual and neutral. No opinions or commentary.
+- Use plain language. No jargon.
+- Write in flowing prose, not bullet points.
+- If the article is too thin to cover all five points, cover what is available — do not pad.
+- Respond in English regardless of the article's language.
+${langNote}
 
 Headline: ${headline}
 
@@ -191,7 +203,7 @@ Article: ${body.slice(0, 2000)}`;
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 350 },
     }),
   });
   if (!res.ok) throw new Error(`Gemini error: ${await res.text()}`);
@@ -334,12 +346,7 @@ async function classifyArticle(headline: string, summary: string, body: string):
   };
 }
 
-// ─── HANDLER: INGEST (fast — no Gemini) ──────────────────────────────────────
-// Fetches RSS feeds and inserts raw articles. Summary/tags are filled by
-// ?phase=summarise which runs on a separate schedule.
-//
-// Processes SOURCES_PER_RUN sources per invocation in a round-robin rotation
-// keyed on the current UTC half-hour slot to stay well under the 150s limit.
+// ─── HANDLER: INGEST ──────────────────────────────────────────────────────────
 
 async function handleIngest(): Promise<Response> {
   const results = { processed: 0, inserted: 0, skipped: 0, errors: 0, sources_this_run: 0 };
@@ -350,14 +357,13 @@ async function handleIngest(): Promise<Response> {
       .from("sources")
       .select("id, name, rss_url, language, active")
       .eq("active", true)
-      .order("id", { ascending: true }); // stable ordering required for rotation
+      .order("id", { ascending: true });
 
     if (sourcesErr) throw sourcesErr;
     if (!allSources?.length) {
       return Response.json({ message: "No active sources configured", results });
     }
 
-    // Round-robin: pick a slice of SOURCES_PER_RUN based on current 30-min slot.
     const slotIndex = Math.floor(now.getTime() / (30 * 60 * 1000));
     const offset = (slotIndex * SOURCES_PER_RUN) % allSources.length;
     const sources = [
@@ -373,7 +379,6 @@ async function handleIngest(): Promise<Response> {
         console.log(`Fetching: ${source.name}`);
         const items = await fetchRssFeed((source as any).rss_url);
 
-        // Bulk dedup: fetch all existing URLs for this batch in one query
         const candidateUrls = items
           .filter((item) => !failsStageOneFilters(item, now))
           .map((item) => item.url);
@@ -442,7 +447,7 @@ async function handleIngest(): Promise<Response> {
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
-// ─── HANDLER: SUMMARISE (Gemini — batched) ────────────────────────────────────
+// ─── HANDLER: SUMMARISE ───────────────────────────────────────────────────────
 
 async function handleSummarise(): Promise<Response> {
   const BATCH_SIZE = 15;
