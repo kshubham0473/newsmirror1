@@ -14,6 +14,7 @@ interface Props {
   onViewModeChange: (mode: ViewMode) => void;
   onSettingsClick: () => void;
   isRefreshing: boolean;
+  onRefreshClick?: () => void;
 }
 
 export default function TopBar({
@@ -21,6 +22,7 @@ export default function TopBar({
   viewMode, onViewModeChange,
   onSettingsClick,
   isRefreshing,
+  onRefreshClick,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -113,6 +115,7 @@ export default function TopBar({
             className={`${styles.iconBtn} ${isRefreshing ? styles.iconBtnSpinning : ""}`}
             aria-label="Checking for new stories"
             disabled={isRefreshing}
+            onClick={onRefreshClick}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
