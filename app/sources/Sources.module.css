@@ -60,7 +60,7 @@
 }
 
 .card:hover {
-  border-color: var(--border-hover, rgba(240, 236, 228, 0.22));
+  border-color: var(--border-hover);
 }
 
 .cardBuilding {
@@ -163,24 +163,24 @@
 
 .axisMiniLabel {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);    /* was text-tertiary — too dim */
 }
 
 .axisTrack {
   position: relative;
-  height: 3px;
-  background: rgba(240, 236, 228, 0.08);
+  height: 4px;
+  background: var(--border);       /* CSS var — works on both themes */
   border-radius: 2px;
   overflow: visible;
 }
 
 .axisMidline {
   position: absolute;
-  top: -2px;
+  top: -3px;
   left: 50%;
   width: 1px;
-  height: 7px;
-  background: rgba(240, 236, 228, 0.2);
+  height: 10px;
+  background: var(--border-hover); /* CSS var */
   z-index: 1;
 }
 
@@ -196,7 +196,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: rgba(240, 236, 228, 0.2);
+  color: var(--text-tertiary);     /* CSS var — was hardcoded rgba */
   line-height: 1;
 }
 
@@ -204,14 +204,14 @@
 
 .progressTrack {
   height: 3px;
-  background: rgba(240, 236, 228, 0.06);
+  background: var(--border);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  background: rgba(240, 236, 228, 0.18);
+  background: var(--text-tertiary);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -226,10 +226,11 @@
 }
 
 .methodologyLink {
-  color: rgba(232, 132, 58, 0.6);
+  color: var(--accent);
+  opacity: 0.65;
   text-decoration: none;
 }
 
 .methodologyLink:hover {
-  color: var(--accent);
+  opacity: 1;
 }
