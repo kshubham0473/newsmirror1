@@ -17,7 +17,7 @@ jobs:
         id: ingest_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/ingest_response.json -w "%{http_code}" -X POST \
-            --max-time 120 \
+            --max-time 145 \
             "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=ingest" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
