@@ -1,17 +1,10 @@
-import { createServerClient as _createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 
+// Server-side Supabase client for use in Server Components and Route Handlers.
+// Uses the anon key — safe for read-only public data (sources, articles).
 export function createServerClient() {
-  const cookieStore = cookies();
-  return _createServerClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
