@@ -14,7 +14,7 @@ jobs:
         id: summarise_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/summarise_response.json -w "%{http_code}" -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles" \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=summarise" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             --data '{}')
@@ -38,7 +38,7 @@ jobs:
               'The summarise edge function returned a non-2xx response or the curl call failed.',
               '',
               '**Checklist**',
-              '- [ ] Check Supabase Edge Function logs (`ingest-articles`)',
+              '- [ ] Check Supabase Edge Function logs (`ingest-articles?phase=summarise`)',
               '- [ ] Verify Gemini API key is set and quota not exceeded',
               '- [ ] Check `articles` table for unexpected schema changes',
               '- [ ] See `docs/ops-runbook.md` for full triage steps',
