@@ -64,6 +64,12 @@ export default async function SourcesPage() {
   return (
     <ScrollableLayout>
     <main className={styles.page}>
+      {/* ── Sticky mini-header with back nav ── */}
+      <div className={styles.stickyNav}>
+        <Link href="/feed" className={styles.navBack}>← Feed</Link>
+        <span className={styles.navTitle}>Sources</span>
+      </div>
+
       <div className={styles.hero}>
         <h1 className={styles.heroTitle}>Source profiles</h1>
         <p className={styles.heroSub}>

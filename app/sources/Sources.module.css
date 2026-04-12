@@ -234,3 +234,38 @@
 .methodologyLink:hover {
   opacity: 1;
 }
+
+/* ── Sticky mini-header ─────────────────────────────────── */
+
+.stickyNav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 44px;
+  background: var(--bg);
+  border-bottom: 0.5px solid var(--border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.navBack {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.navBack:hover {
+  color: var(--text-primary);
+}
+
+.navTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.03em;
+}
