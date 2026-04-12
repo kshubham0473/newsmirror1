@@ -79,7 +79,7 @@ export default function StoryCard({ article, isActive, position, total }: Props)
     <article
       className={`${styles.card} ${isActive ? styles.active : ""} ${hasImage ? styles.hasImage : ""}`}
     >
-      {/* Background image */}
+      {/* Background image — top 52% of card */}
       {hasImage && (
         <div className={styles.imageBg}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,11 +90,11 @@ export default function StoryCard({ article, isActive, position, total }: Props)
             loading="lazy"
             onError={() => setImgFailed(true)}
           />
-          {/* Multi-layer overlay for guaranteed readability */}
           <div className={styles.overlayTop} />
-          <div className={styles.overlayBottom} />
         </div>
       )}
+      {/* Gradient bridge from image into content area */}
+      {hasImage && <div className={styles.overlayTransition} aria-hidden />}
 
       <div className={styles.content}>
         {/* ── Top meta bar with frosted pill ── */}
