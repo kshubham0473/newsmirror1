@@ -166,9 +166,9 @@ export default function FeedClient({ initialArticles }: Props) {
       />
 
       <TopicFilter
-        topics={TOPICS}
-        active={activeTopic}
-        onChange={(id) => setActiveTopic(id as TopicId | null)}
+        topics={TOPICS as unknown as { id: string; label: string }[]}
+        activeTopic={activeTopic}
+        onTopicChange={(id) => setActiveTopic(id as TopicId | null)}
         savedTopics={prefs.topics}
         sources={allSources}
         activeSource={activeSource}
