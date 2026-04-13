@@ -12,12 +12,14 @@ permissions:
 jobs:
   ingest:
     runs-on: ubuntu-latest
+    env:
+      INGEST_SOURCES_PER_RUN: 3
     steps:
       - name: Fetch new articles
         id: ingest_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/ingest_response.json -w "%{http_code}" -X POST \
-            --max-time 145 \
+            --max-time 120 \
             "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=ingest" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
