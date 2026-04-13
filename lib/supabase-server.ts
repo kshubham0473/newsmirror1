@@ -1,4 +1,4 @@
-import { createServerClient as _create } from "@supabase/ssr";
+import { createServerClient as _create, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export function createServerClient() {
@@ -11,7 +11,7 @@ export function createServerClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
