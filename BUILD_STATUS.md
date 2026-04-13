@@ -50,7 +50,7 @@ New 80–100 word summary prompt live. Topic diversity round-robin sort in feed.
 
 **Out of scope for 3B:** clustering, radar page, reading events.
 
-**Key decisions already made:**
+**Key decisions:**
 - Google OAuth only (not magic link) — lower friction, enables analytics
 - Preferences auto-migrated on first sign-in, not manually
 - Radar page deferred — functionality to be defined first, UI second
@@ -61,19 +61,21 @@ New 80–100 word summary prompt live. Topic diversity round-robin sort in feed.
 
 ---
 
-### 🔲 Build 3C — Clustering + Similar Articles
+### 🔲 Build 3C — Clustering + Story Pages + GDELT
 
 **Scope:**
-- Generate embeddings for each article during `?phase=summarise` — write to existing `embedding vector(768)` column
+- Generate embeddings per article during `?phase=summarise` — write to existing `embedding vector(768)` column
 - Create pgvector IVFFlat index once article count exceeds 1,000
 - Cluster articles by embedding similarity → populate `story_clusters` + `article_clusters` tables (already in schema)
-- Surface "N sources covered this" on feed cards / article view
+- Story detail page inside the app: all sources covering the same event, framing comparison side by side
+- Surface "N sources covered this" on feed cards
+- GDELT as supplementary ingestion for sources without working RSS (see Data Sources section)
 
 **Out of scope for 3C:** personalised nudges (needs reading history).
 
-**Dependencies:** Build 3B (auth) not required. Can run in parallel or after.
+**Dependencies:** Build 3B not required. Can run independently.
 
-**Risk:** Embedding generation adds a Gemini call per article during summarisation. At current volume (~15 articles/batch) this is fine. Monitor costs if volume increases significantly. pgvector IVFFlat index must be created manually after 1,000+ articles: `CREATE INDEX USING ivfflat (embedding vector_cosine_ops)`.
+**Risk:** Embedding generation adds one Gemini call per article during summarisation. Fine at current volume. pgvector IVFFlat index must be created manually after 1,000+ articles: `CREATE INDEX USING ivfflat (embedding vector_cosine_ops)`.
 
 ---
 
@@ -82,62 +84,93 @@ New 80–100 word summary prompt live. Topic diversity round-robin sort in feed.
 **Scope:**
 - Track article opens (source, topic, time spent) for logged-in users
 - Write to `reading_events` table (already in schema)
-- No UI yet — purely data collection
+- No UI — purely data collection
 
 **Dependencies:** Build 3B (need a user_id to attach events to).
 
 ---
 
-### 🔲 Build 4B — Perspective Radar + Personalised Nudges
+### 🔲 Build 4B — Reader Profile + Radar Page
 
 **Scope:**
-- `/radar` page: personal weekly summary of reading patterns across the 4 ideology axes
-- "You've read mostly from sources that tend toward X" — framed as observation, not judgement
-- Feed nudges: "Based on your reading, you haven't seen coverage from [source]" — surfaced as a subtle card in the feed
+- `/profile` page showing user's reading patterns across all 4 ideology axes
+- Weekly digest format — not real-time
+- Visual graphs: axis breakdown, source diversity, topic distribution (similar to Ground.news reader profile)
+- Nudge activates once user has read 15+ articles minimum
+- No ideology nudges pushed into the feed — user infers from their own radar
+- "Blindspot" discovery surface (stories covered by only one framing) — separate surface, brainstorm before building
 
-**Dependencies:** Build 3B (auth) + Build 3C (clustering) + Build 4A (reading events with enough data).
+**Dependencies:** Build 3B + Build 3C + Build 4A (reading events with sufficient data).
 
-**Note:** The nudge requires at minimum a few sessions of reading data before it's meaningful. Don't surface it until a user has read 20+ articles.
+**Open questions before building:**
+- Which axes to show on the radar — all 4 or simplified?
+- Weekly digest: email notification vs in-app badge?
+- How many weeks of history to show by default?
 
 ---
 
 ### 🔲 Build 4C — Freemium
 
-**Scope:** To be defined. Perspective radar / personalised nudges are the likely paid layer. Auth and reading history must exist first.
+**Scope:** Deferred. Monetisation strategy pending. Likely paid layer is the reader profile/radar. Auth and reading history must exist first.
+
+---
+
+## Data Sources — Current & Planned
+
+### Current: RSS feeds
+Working for ~15 sources. Problems: several sources have broken/absent RSS (The Wire, some regional outlets), wire service reposts inflate volume with low editorial value.
+
+### Planned: GDELT (Build 3C)
+
+GDELT is a free, completely open global news monitor updated every 15 minutes. Relevant facts for NewsMirror:
+
+**What we get from GDELT:**
+- `sourcecountry:IN` filter returns Indian-origin articles
+- Covers Hindi, Tamil, Telugu, Marathi, Malayalam, Punjabi, Gujarati, Urdu — sources that don't publish RSS
+- Up to 250 article URLs per request: title, URL, date, source domain, language
+- Updates every 15 min — same cadence as our current ingest
+
+**What we don't get:**
+- Full article body — GDELT returns URLs only, content must be fetched separately
+- Perfect metadata — academic research puts field accuracy at ~55%, but our Stage 1 filter + Gemini summarisation acts as a quality gate
+
+**Integration plan (Build 3C):**
+Add `?phase=ingest_gdelt` to Edge Function:
+1. Query GDELT DOC API with `sourcecountry:IN` + language filters
+2. Filter to domains not already covered by active RSS sources
+3. Fetch article content from URL
+4. Run through existing Stage 1 filter → summarise → classify pipeline
+5. Deduplicate against existing articles
+
+RSS stays primary. GDELT is supplementary for coverage gaps only.
+
+---
+
+## Dependency Chain
+
+```
+Auth (3B)
+  └── Reading events (4A)
+        └── Reader profile / radar (4B)
+              └── Blindspot surface (TBD — brainstorm before build)
+
+Embeddings + clustering (3C) — independent of auth
+  └── Story pages with multi-source framing (3C)
+  └── "N sources covered this" on feed cards (3C)
+  └── GDELT supplementary ingestion (3C)
+  └── Can feed into reader profile nudges (4B) later
+```
 
 ---
 
 ## Known Bugs & Tech Debt
 
-| Issue | Severity | Notes |
-|---|---|---|
-| Ingest occasionally times out (curl exit 28) | Medium | `--max-time 145` set in `ingest.yml`. Happens when Supabase Edge Function approaches 150s limit. Monitor — may need to reduce `SOURCES_PER_RUN` from 4 to 3 if it persists. |
-| pgvector IVFFlat index not created | Low | Add after 1,000+ articles: `CREATE INDEX USING ivfflat`. No impact until Build 3C. |
-| Next.js 14.2.5 security advisory | Low | Upgrade to latest Next.js when convenient. No known exploits in production context. |
-| Admin page has no auth | Low | Fine for personal beta. Add Vercel password protection before wider launch. |
-| `summarise.yml` was calling bare Edge Function URL (no `?phase=`) | Fixed | Now correctly calls `?phase=summarise`. Old articles in DB have 2–3 sentence summaries. New articles get 80–100 word summaries. No backfill planned. |
-| `sample_size` column mismatch | Fixed | Schema uses `article_sample_count`, frontend was querying `sample_size`. Fixed in Apr 2026 — sources page now shows profiles correctly. |
-| Card layout broken after previous patch attempt | Fixed | Reverted to original JSX. CSS-only split layout (48/52) shipped Apr 2026. |
-
----
-
-## Dependency Chain (simplified)
-
-```
-Auth (3B)
-  └── Reading events (4A)
-        └── Personalised nudges (4B)
-
-Embeddings (3C) — independent
-  └── "N sources covered this" clustering (3C)
-  └── Can feed into personalised nudges (4B) later
-```
-
----
-
-## Questions to Resolve Before Build 4B
-
-- What does the radar page actually show? (weekly digest vs real-time? which axes?)
-- At what reading volume does a nudge become meaningful? (suggested: 20+ articles)
-- How do we frame ideology nudges to feel helpful not preachy?
-- Freemium line: what's free, what's paid?
+| Issue | Severity | Status | Notes |
+|---|---|---|---|
+| Ingest occasionally times out (curl exit 28) | Medium | Mitigated | `--max-time 145` in `ingest.yml`. Reduce `SOURCES_PER_RUN` from 4 to 3 if it persists. |
+| pgvector IVFFlat index not created | Low | Pending | Add after 1,000+ articles: `CREATE INDEX USING ivfflat`. No impact until Build 3C. |
+| Next.js 14.2.5 security advisory | Low | Pending | Upgrade to latest when convenient. |
+| Admin page has no auth | Low | Acceptable | Add Vercel password protection before wider launch. |
+| `sample_size` column mismatch | Fixed | ✅ | Schema uses `article_sample_count`. Frontend fix shipped Apr 2026. |
+| Card layout — text invisible on light images | Fixed | ✅ | Solid text zone (48/52 split) shipped Apr 2026. |
+| Several RSS sources broken or low quality | Ongoing | Monitor | Stage 1 filter handles quality. GDELT fills coverage gaps in Build 3C. |
