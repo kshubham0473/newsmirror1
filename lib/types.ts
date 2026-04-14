@@ -23,6 +23,9 @@ export interface Article {
   economic_score: number | null;
   institution_score: number | null;
   sources?: Pick<Source, "id" | "name" | "home_url" | "language">;
+  // Populated by feed query join (Build 3C)
+  cluster_id?: string | null;
+  cluster_source_count?: number | null;
 }
 
 export const TOPICS = [

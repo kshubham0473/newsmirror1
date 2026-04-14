@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Article } from "@/lib/types";
 import styles from "./StoryCard.module.css";
 
@@ -158,6 +159,12 @@ export default function StoryCard({ article, isActive, position, total }: Props)
                 />
               </svg>
             </a>
+
+            {article.cluster_id && sourceCount && sourceCount >= 2 && (
+              <Link href={`/story/${article.cluster_id}`} className={styles.compareBtn}>
+                {sourceCount} sources
+              </Link>
+            )}
 
             <button
               className={`${styles.saveBtn} ${saved ? styles.saveBtnActive : ""}`}

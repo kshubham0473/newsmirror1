@@ -162,3 +162,33 @@
 .readBtn:hover {
   color: var(--text-primary);
 }
+
+/* ── Cluster additions (Build 3C) ─────────────────────────────── */
+
+.sourcesPill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.sourcesPill:hover { opacity: 0.75; }
+
+.compareBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.compareBtn:hover { opacity: 0.75; }
