@@ -1,11 +1,11 @@
 // supabase/functions/ingest-articles/index.ts
 // Deploy: supabase functions deploy ingest-articles
-// Schedule via GitHub Actions (see .github/workflows/ingest.yml): "*/30 * * * *" (every 30 minutes)
 //
 // Phase routing:
-//   ?phase=ingest    — fetch RSS feeds, deduplicate, insert raw articles (NO Gemini calls)
-//   ?phase=summarise — summarise + tag unsummarised articles (Gemini)
+//   ?phase=ingest    — fetch RSS feeds, deduplicate, insert raw articles
+//   ?phase=summarise — summarise + tag + embed unsummarised articles (Gemini)
 //   ?phase=classify  — classify articles with summaries (Gemini)
+//   ?phase=cluster   — cluster articles by embedding similarity (scheduled every 6h)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -17,6 +17,11 @@ const supabase = createClient(
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const EMBED_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-005:embedContent";
+
+// Cosine similarity threshold for clustering — tune via env var without redeployment
+const CLUSTER_THRESHOLD = parseFloat(Deno.env.get("CLUSTER_THRESHOLD") ?? "0.82");
 
 const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "4");
 
@@ -91,12 +96,12 @@ function parseRss(xml: string): RssItem[] {
 }
 
 function extractTag(xml: string, tag: string): string | null {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, "i");
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
   return xml.match(re)?.[1]?.trim() ?? null;
 }
 
 function extractCdata(xml: string, tag: string): string | null {
-  const re = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\/${tag}>`, "i");
+  const re = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i");
   return xml.match(re)?.[1]?.trim() ?? null;
 }
 
@@ -164,7 +169,7 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
   const wirePrefixes = ["PTI", "ANI", "IANS", "REUTERS", "AFP", "AP "];
   if (wirePrefixes.some(
     (prefix) =>
-      upperBody.startsWith(prefix + " ") || upperBody.startsWith(prefix + ":")||
+      upperBody.startsWith(prefix + " ") || upperBody.startsWith(prefix + ":") ||
       upperHeadline.startsWith(prefix + " ") || upperHeadline.startsWith(prefix + ":")
   )) return true;
 
@@ -176,7 +181,6 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
 async function summariseArticle(headline: string, body: string, language: string): Promise<string> {
   const langNote = language !== "en" ? `The article may be in ${language}. Respond in English regardless.` : "";
 
-  // Build 5 — updated prompt targeting 80-100 words covering the full story
   const prompt = `Summarise this Indian news article in 80–100 words. Write for a reader who will not click through to the full story — give them everything they need to understand the event completely.
 
 Structure your summary to cover:
@@ -239,6 +243,24 @@ Summary: ${summary}`;
   } catch {
     return [];
   }
+}
+
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  const res = await fetch(`${EMBED_URL}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "models/text-embedding-005",
+      content: { parts: [{ text }] },
+      taskType: "SEMANTIC_SIMILARITY",
+    }),
+  });
+  if (!res.ok) {
+    console.error(`Embedding error: ${await res.text()}`);
+    return null;
+  }
+  const data = await res.json();
+  return data.embedding?.values ?? null;
 }
 
 // ─── CLASSIFICATION ───────────────────────────────────────────────────────────
@@ -346,6 +368,19 @@ async function classifyArticle(headline: string, summary: string, body: string):
   };
 }
 
+// ─── COSINE SIMILARITY ────────────────────────────────────────────────────────
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 // ─── HANDLER: INGEST ──────────────────────────────────────────────────────────
 
 async function handleIngest(): Promise<Response> {
@@ -372,13 +407,10 @@ async function handleIngest(): Promise<Response> {
     ].slice(0, SOURCES_PER_RUN);
 
     results.sources_this_run = sources.length;
-    console.log(`Processing ${sources.length}/${allSources.length} sources (slot ${slotIndex}, offset ${offset}):`, sources.map((s: any) => s.name));
 
     for (const source of sources) {
       try {
-        console.log(`Fetching: ${source.name}`);
         const items = await fetchRssFeed((source as any).rss_url);
-
         const candidateUrls = items
           .filter((item) => !failsStageOneFilters(item, now))
           .map((item) => item.url);
@@ -394,16 +426,8 @@ async function handleIngest(): Promise<Response> {
 
         for (const item of items) {
           results.processed++;
-
-          if (failsStageOneFilters(item, now)) {
-            results.skipped++;
-            continue;
-          }
-
-          if (existingUrls.has(item.url)) {
-            results.skipped++;
-            continue;
-          }
+          if (failsStageOneFilters(item, now)) { results.skipped++; continue; }
+          if (existingUrls.has(item.url)) { results.skipped++; continue; }
 
           let published_at: string | null = null;
           if (item.published_at) {
@@ -423,12 +447,8 @@ async function handleIngest(): Promise<Response> {
           });
 
           if (insertErr) {
-            if ((insertErr as any).code === "23505") {
-              results.skipped++;
-            } else {
-              console.error("Insert error:", insertErr);
-              results.errors++;
-            }
+            if ((insertErr as any).code === "23505") { results.skipped++; }
+            else { console.error("Insert error:", insertErr); results.errors++; }
           } else {
             results.inserted++;
           }
@@ -443,15 +463,14 @@ async function handleIngest(): Promise<Response> {
     return Response.json({ error: String(err) }, { status: 500 });
   }
 
-  console.log("Ingest complete:", results);
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
-// ─── HANDLER: SUMMARISE ───────────────────────────────────────────────────────
+// ─── HANDLER: SUMMARISE (now also embeds) ─────────────────────────────────────
 
 async function handleSummarise(): Promise<Response> {
   const BATCH_SIZE = 15;
-  const results = { processed: 0, summarised: 0, errors: 0 };
+  const results = { processed: 0, summarised: 0, embedded: 0, errors: 0 };
 
   try {
     const { data: articles, error } = await supabase
@@ -482,13 +501,23 @@ async function handleSummarise(): Promise<Response> {
           (article as any).body ?? "",
           language
         );
+
         let topic_tags: string[] = [];
         if (summary) {
           topic_tags = await tagTopics((article as any).headline, summary);
         }
+
+        // Generate embedding from headline + summary
+        let embedding: number[] | null = null;
+        if (summary) {
+          const embText = `${(article as any).headline}. ${summary}`.trim();
+          embedding = await generateEmbedding(embText);
+          if (embedding) results.embedded++;
+        }
+
         const { error: updateErr } = await supabase
           .from("articles")
-          .update({ summary, topic_tags })
+          .update({ summary, topic_tags, ...(embedding ? { embedding } : {}) })
           .eq("id", (article as any).id);
 
         if (updateErr) {
@@ -578,15 +607,155 @@ async function handleClassify(): Promise<Response> {
   return Response.json({ summary, timestamp: now.toISOString() });
 }
 
+// ─── HANDLER: CLUSTER ─────────────────────────────────────────────────────────
+//
+// Strategy:
+//   1. Pull all articles from the last 72h that have an embedding
+//   2. For each article not yet in a cluster, compare against all others
+//      using cosine similarity
+//   3. Group articles above CLUSTER_THRESHOLD into a cluster
+//   4. Use single-linkage: an article joins a cluster if it's similar to ANY
+//      member already in that cluster
+//   5. Upsert story_clusters (keyed on sorted article UUID set to avoid dupes)
+//   6. Upsert article_clusters rows
+//
+// Runs in ~O(n²) — at 72h volume (~500–800 articles) this is fine in an
+// Edge Function. Revisit if 72h volume exceeds ~2000 articles.
+
+async function handleCluster(): Promise<Response> {
+  const results = { articles_loaded: 0, clusters_created: 0, clusters_updated: 0, articles_assigned: 0, errors: 0 };
+
+  try {
+    // 1. Pull recent articles with embeddings
+    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, headline, source_id, embedding, published_at")
+      .not("embedding", "is", null)
+      .gte("published_at", cutoff)
+      .order("published_at", { ascending: false });
+
+    if (error) throw error;
+    if (!articles?.length) {
+      return Response.json({ message: "No embedded articles in window", results });
+    }
+
+    results.articles_loaded = articles.length;
+    console.log(`Clustering ${articles.length} articles...`);
+
+    // 2. Union-find style clustering
+    // Each article starts in its own cluster (keyed by index)
+    const clusterOf: number[] = articles.map((_, i) => i);
+
+    function find(i: number): number {
+      while (clusterOf[i] !== i) {
+        clusterOf[i] = clusterOf[clusterOf[i]]; // path compression
+        i = clusterOf[i];
+      }
+      return i;
+    }
+
+    function union(i: number, j: number) {
+      clusterOf[find(i)] = find(j);
+    }
+
+    // 3. Compare all pairs
+    for (let i = 0; i < articles.length; i++) {
+      for (let j = i + 1; j < articles.length; j++) {
+        const sim = cosineSimilarity(
+          (articles[i] as any).embedding,
+          (articles[j] as any).embedding
+        );
+        if (sim >= CLUSTER_THRESHOLD) {
+          union(i, j);
+        }
+      }
+    }
+
+    // 4. Group by root
+    const groups = new Map<number, typeof articles>();
+    for (let i = 0; i < articles.length; i++) {
+      const root = find(i);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root)!.push(articles[i]);
+    }
+
+    // 5. Only persist clusters with 2+ articles (singletons are not stories)
+    const multiSourceGroups = Array.from(groups.values()).filter((g) => g.length >= 2);
+    console.log(`Found ${multiSourceGroups.length} clusters with 2+ articles`);
+
+    for (const group of multiSourceGroups) {
+      try {
+        // Use the most recent article's headline as the canonical headline
+        const canonical = group[0] as any;
+
+        // Check if any article in the group is already assigned to a cluster
+        const articleIds = group.map((a: any) => a.id);
+        const { data: existingAssignments } = await supabase
+          .from("article_clusters")
+          .select("cluster_id")
+          .in("article_id", articleIds)
+          .limit(1);
+
+        let clusterId: string;
+
+        if (existingAssignments && existingAssignments.length > 0) {
+          // Cluster exists — reuse it
+          clusterId = existingAssignments[0].cluster_id;
+          results.clusters_updated++;
+        } else {
+          // New cluster
+          const { data: newCluster, error: clusterErr } = await supabase
+            .from("story_clusters")
+            .insert({ canonical_headline: canonical.headline })
+            .select("id")
+            .single();
+
+          if (clusterErr || !newCluster) {
+            console.error("Cluster insert error:", clusterErr);
+            results.errors++;
+            continue;
+          }
+
+          clusterId = newCluster.id;
+          results.clusters_created++;
+        }
+
+        // Upsert article_cluster rows (safe to re-run)
+        const rows = articleIds.map((article_id: string) => ({ article_id, cluster_id: clusterId }));
+        const { error: acErr } = await supabase
+          .from("article_clusters")
+          .upsert(rows, { onConflict: "article_id,cluster_id" });
+
+        if (acErr) {
+          console.error("article_clusters upsert error:", acErr);
+          results.errors++;
+        } else {
+          results.articles_assigned += rows.length;
+        }
+      } catch (groupErr) {
+        console.error("Group processing error:", groupErr);
+        results.errors++;
+      }
+    }
+  } catch (err) {
+    console.error("Fatal cluster error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, threshold: CLUSTER_THRESHOLD, timestamp: new Date().toISOString() });
+}
+
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const phase = url.searchParams.get("phase") ?? "ingest";
 
-  if (phase === "ingest") return handleIngest();
+  if (phase === "ingest")    return handleIngest();
   if (phase === "summarise") return handleSummarise();
-  if (phase === "classify") return handleClassify();
+  if (phase === "classify")  return handleClassify();
+  if (phase === "cluster")   return handleCluster();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });
