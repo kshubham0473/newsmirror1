@@ -12,7 +12,7 @@ import TopicFilter from "../ui/TopicFilter";
 import Onboarding from "../ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
-import { useAuth } from "@/lib/useAuth";
+
 const LAST_SEEN_KEY = "nm_last_seen";
 
 interface Props {
@@ -59,7 +59,7 @@ export default function FeedClient({ initialArticles }: Props) {
 //  const { prefs, loaded, save } = usePreferences();
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
-
+import { useAuth } from "@/lib/useAuth";
 
 const { user } = useAuth();
 const { prefs, loaded, save } = usePreferences(user);
