@@ -1,36 +1,42 @@
 /* NewsMirror — Global Styles
-   Aesthetic: editorial dark · Playfair Display headlines · DM Sans body
-   Accent: saffron #E8843A · Background: #0f0f0f · Surface: #181818
+   Rebrand: Pastel cards · Plus Jakarta Sans headlines · Outfit body
+   Background: #111111 · Card colours: #FFE8E5 / #E0F1FF / #FFF2C5
 */
 
 :root {
-  --bg:           #0f0f0f;
-  --surface:      #181818;
-  --surface-2:    #222222;
+  --bg:           #111111;
+  --surface:      #1c1c1c;
+  --surface-2:    #242424;
   --border:       rgba(255, 255, 255, 0.07);
   --border-hover: rgba(255, 255, 255, 0.14);
 
-  --text-primary:   #f0ece4;
-  --text-secondary: #8a8580;
+  --text-primary:   #f5f2ee;
+  --text-secondary: #888480;
   --text-tertiary:  #4a4742;
 
-  --accent:       #E8843A;
-  --accent-dim:   rgba(232, 132, 58, 0.12);
-  --accent-glow:  rgba(232, 132, 58, 0.06);
+  --accent:       #c4611a;
+  --accent-dim:   rgba(196, 97, 26, 0.12);
 
-  --pill-bg:           rgba(255,255,255,0.05);
-  --pill-active:       rgba(232, 132, 58, 0.15);
-  --pill-text-active:  #E8843A;
+  /* Pastel card colours */
+  --card-blush:   #FFE8E5;
+  --card-blue:    #E0F1FF;
+  --card-cream:   #FFF2C5;
+  --card-text:    #111111;
 
-  --font-display: "Playfair Display", Georgia, serif;
-  --font-body:    "DM Sans", system-ui, sans-serif;
+  --pill-bg:           rgba(255,255,255,0.06);
+  --pill-active-bg:    #ffffff;
+  --pill-active-text:  #111111;
+
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body:    "Outfit", system-ui, sans-serif;
 
   --page-pad: 1rem;
   --max-w:    680px;
 
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
+  --r-sm:  8px;
+  --r-md:  14px;
+  --r-lg:  22px;
+  --r-xl:  28px;
 }
 
 *, *::before, *::after {
@@ -52,10 +58,10 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1.6;
   height: 100dvh;
-  overflow: hidden; /* card mode controls its own scroll */
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -97,24 +103,19 @@ img {
   white-space: nowrap;
 }
 
-/* ── Light mode ─────────────────────────────────────────────────────────────
-   Applied via data-theme="light" on <html>.
-   ThemeProvider sets this on mount from localStorage.
-   ─────────────────────────────────────────────────────────────────────────── */
-
+/* Light mode — keeps pastel card identity, brightens chrome */
 [data-theme="light"] {
-  --bg:               #f5f1eb;
-  --surface:          #ece8e0;
-  --surface-2:        #e0dbd2;
-  --border:           rgba(0, 0, 0, 0.08);
-  --border-hover:     rgba(0, 0, 0, 0.16);
-  --text-primary:     #1a1916;
+  --bg:               #f0ede8;
+  --surface:          #e8e4de;
+  --surface-2:        #dedad3;
+  --border:           rgba(0, 0, 0, 0.07);
+  --border-hover:     rgba(0, 0, 0, 0.14);
+  --text-primary:     #111111;
   --text-secondary:   #6b6760;
   --text-tertiary:    #9e9990;
   --accent:           #c4611a;
   --accent-dim:       rgba(196, 97, 26, 0.1);
-  --accent-glow:      rgba(196, 97, 26, 0.05);
   --pill-bg:          rgba(0, 0, 0, 0.05);
-  --pill-active:      rgba(196, 97, 26, 0.12);
-  --pill-text-active: #c4611a;
+  --pill-active-bg:   #111111;
+  --pill-active-text: #ffffff;
 }

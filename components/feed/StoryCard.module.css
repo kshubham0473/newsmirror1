@@ -1,282 +1,256 @@
 .card {
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  overflow: hidden;
-  transition: opacity 0.35s ease;
-}
-
-.card:not(.active) {
-  opacity: 0.4;
-}
-
-.active {
-  opacity: 1;
-}
-
-/* ── Background image — top 48% only ─────────────────────── */
-.imageBg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 48%;
-  z-index: 0;
-}
-
-.bgImg {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center 20%;
-}
-
-/* Top overlay — meta pill readability */
-.overlayTop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100px;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0) 100%
-  );
-}
-
-/* Light mode — warm tint bridges topbar to image */
-:global([data-theme="light"]) .overlayTop {
-  background: linear-gradient(
-    to bottom,
-    rgba(245, 241, 235, 0.7) 0%,
-    rgba(0, 0, 0, 0) 100%
-  );
-}
-
-/* Transition — blends image bottom into text zone */
-.overlayBottom {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40px;
-  background: linear-gradient(to top, var(--surface), transparent);
-}
-
-/* ── Content layer ────────────────────────────────────────── */
-.content {
-  position: relative;
-  z-index: 1;
-  height: 100%;
+  border-radius: var(--r-xl);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 0.85rem 1rem;
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  /* colour set inline via style prop */
 }
 
-/* ── Top meta bar — liquid glass pills ───────────────────── */
-.topBar {
+/* ── Top strip (10%) ──────────────────────────────────── */
+
+.strip {
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  padding: 0 14px;
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
-.metaPill {
+.stripLeft {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 99px;
-  padding: 4px 10px;
-}
-
-/* Light mode pills */
-:global([data-theme="light"]) .metaPill {
-  background: rgba(245, 241, 235, 0.88);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
-:global([data-theme="light"]) .age,
-:global([data-theme="light"]) .counter,
-:global([data-theme="light"]) .metaDivider,
-:global([data-theme="light"]) .tag {
-  color: var(--text-secondary);
-}
-
-.source {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--accent);
+  gap: 6px;
+  min-width: 0;
 }
 
 .leanPill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 99px;
+  padding: 4px 10px 4px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--card-text);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
-
-.leanPill_identity   { border-color: rgba(252, 211, 77, 0.4); }
-.leanPill_state      { border-color: rgba(52, 211, 153, 0.4); }
-.leanPill_economy    { border-color: rgba(59, 130, 246, 0.4); }
-.leanPill_institutions { border-color: rgba(244, 114, 182, 0.4); }
-.leanPill_low  { opacity: 0.75; }
-.leanPill_high { opacity: 1; }
 
 .leanDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background: #c4611a;
+  flex-shrink: 0;
 }
 
-.leanLabel { white-space: nowrap; }
-
-.tag {
+.neutralLabel {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.65);
-  text-transform: capitalize;
+  font-weight: 500;
+  color: var(--card-text);
+  opacity: 0.28;
+  letter-spacing: 0.02em;
 }
 
-.metaDivider {
+.stripRight {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.tagChip {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+  color: var(--card-text);
+  opacity: 0.5;
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 99px;
+  padding: 3px 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.counter {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--card-text);
+  opacity: 0.25;
+}
+
+/* ── Image zone (40%) ─────────────────────────────────── */
+
+.imageZone {
+  flex: 0 0 40%;
+  overflow: hidden;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.imagePlaceholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+/* ── Text zone (50%) ──────────────────────────────────── */
+
+.textZone {
+  flex: 1;
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sourceAvatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--card-text);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.sourceName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--card-text);
+  opacity: 0.4;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .age {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.counter {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Spacer — exactly 48% pushes body below the image ────── */
-.spacer {
-  flex: 0 0 48%;
-  min-height: 0;
-  pointer-events: none;
-}
-
-/* ── Body — sits on solid surface below the image ────────── */
-.body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  flex: 1;
-  min-height: 0;
-  background: var(--surface);
-  padding-top: 0.5rem;
+  color: var(--card-text);
+  opacity: 0.25;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .headline {
   font-family: var(--font-display);
-  font-size: clamp(1.2rem, 3.8vw, 1.6rem);
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.28;
+  color: var(--card-text);
   letter-spacing: -0.02em;
-}
-
-.summary {
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--text-secondary);
   display: -webkit-box;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* Cards without image — content fills full height */
-.card:not(.hasImage) .spacer {
-  display: none;
+.summary {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--card-text);
+  opacity: 0.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
-.card:not(.hasImage) .body {
-  padding-top: 0;
-}
+/* ── Footer ───────────────────────────────────────────── */
 
-/* ── Actions ──────────────────────────────────────────────── */
-.actions {
+.footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 0.75rem;
-  border-top: 0.5px solid var(--border);
   margin-top: auto;
+  padding-top: 4px;
+}
+
+.sourcesPill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 99px;
+  padding: 5px 11px 5px 7px;
+  text-decoration: none;
+}
+
+.sourceDots {
+  display: flex;
+}
+
+.sourceDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  margin-left: -4px;
+}
+
+.sourceDot:first-child {
+  margin-left: 0;
+}
+
+.sourcesLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--card-text);
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.singleSource {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--card-text);
+  opacity: 0.25;
+  padding-left: 2px;
 }
 
 .readBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+  font-family: var(--font-body);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-  transition: opacity 0.15s;
+  font-weight: 600;
+  color: var(--card-text);
+  background: rgba(0, 0, 0, 0.09);
+  border-radius: 99px;
+  padding: 6px 14px;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
 
-.readBtn:hover { opacity: 0.75; }
-
-.saveBtn {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: var(--text-tertiary);
-  background: var(--surface-2);
-  border: 0.5px solid var(--border);
-  transition: all 0.15s;
+.readBtn:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
-
-.saveBtn:hover {
-  color: var(--text-secondary);
-  background: var(--surface-2);
-}
-
-.saveBtnActive {
-  color: var(--accent) !important;
-  background: var(--accent-dim) !important;
-  border-color: rgba(232, 132, 58, 0.3) !important;
-}
-
-/* ── Cluster compare button (Build 3C) ───────────────────────── */
-
-.compareBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--accent);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-decoration: none;
-  transition: opacity 0.15s;
-}
-
-.compareBtn:hover { opacity: 0.75; }

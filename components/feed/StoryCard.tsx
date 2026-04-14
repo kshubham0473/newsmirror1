@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { Article } from "@/lib/types";
 import styles from "./StoryCard.module.css";
 
+// Cycle through 3 pastel card colours by position
+const CARD_COLORS = ["var(--card-blush)", "var(--card-blue)", "var(--card-cream)"];
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -19,172 +22,126 @@ function timeAgo(dateStr: string | null): string {
 interface Props {
   article: Article;
   isActive: boolean;
-  position: number;
+  position: number;   // 1-based, used for colour cycling
   total: number;
+  isDragging?: boolean;
 }
 
-function getLeanMeta(article: Article):
-  | { label: string; strength: "low" | "high"; axis: "identity" | "state" | "economy" | "institutions" }
-  | null {
+function getLean(article: Article): string | null {
   const { identity_score, state_trust_score, economic_score, institution_score } = article;
 
-  const scores: { axis: "identity" | "state" | "economy" | "institutions"; value: number | null }[] = [
-    { axis: "identity", value: identity_score },
-    { axis: "state", value: state_trust_score },
-    { axis: "economy", value: economic_score },
-    { axis: "institutions", value: institution_score },
+  const axes = [
+    { label: "Identity framing",    value: identity_score },
+    { label: "State narrative",     value: state_trust_score },
+    { label: "Economic framing",    value: economic_score },
+    { label: "Institutional tone",  value: institution_score },
   ];
 
-  const withDiff = scores
-    .filter((s) => typeof s.value === "number")
-    .map((s) => ({ ...s, diff: Math.abs((s.value as number) - 0.5) }));
+  const scored = axes
+    .filter((a) => typeof a.value === "number")
+    .map((a) => ({ ...a, diff: Math.abs((a.value as number) - 0.5) }))
+    .sort((a, b) => b.diff - a.diff);
 
-  if (!withDiff.length) return null;
-
-  const dominant = withDiff.reduce((best, curr) => (curr.diff > best.diff ? curr : best));
-
-  // Ignore very small deviations from neutral
-  if (dominant.diff < 0.12) return null;
-
-  const strength: "low" | "high" = dominant.diff >= 0.25 ? "high" : "low";
-
-  let label = "";
-  switch (dominant.axis) {
-    case "identity":
-      label = "Identity framing";
-      break;
-    case "state":
-      label = "State narrative";
-      break;
-    case "economy":
-      label = "Economic framing";
-      break;
-    case "institutions":
-      label = "Institutional tone";
-      break;
-  }
-
-  return { label, strength, axis: dominant.axis };
+  if (!scored.length || scored[0].diff < 0.12) return null;
+  return scored[0].label;
 }
 
-export default function StoryCard({ article, isActive, position, total }: Props) {
-  const [saved, setSaved] = useState(false);
+export default function StoryCard({ article, position, total }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
   const hasImage = !!article.image_url && !imgFailed;
   const sourceName = article.sources?.name ?? "Unknown";
+  const sourceInit = sourceName.slice(0, 2).toUpperCase();
   const age = timeAgo(article.published_at ?? article.ingested_at);
   const tag = article.topic_tags?.[0];
-  const leanMeta = getLeanMeta(article);
+  const lean = getLean(article);
   const sourceCount = article.cluster_source_count ?? null;
+  const cardColor = CARD_COLORS[(position - 1) % 3];
 
   return (
-    <article
-      className={`${styles.card} ${isActive ? styles.active : ""} ${hasImage ? styles.hasImage : ""}`}
-    >
-      {/* Background image — top 52% of card */}
-      {hasImage && (
-        <div className={styles.imageBg}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+    <article className={styles.card} style={{ background: cardColor }}>
+
+      {/* ── Top strip: lean pill left · tag + counter right ── */}
+      <div className={styles.strip}>
+        <div className={styles.stripLeft}>
+          {lean ? (
+            <span className={styles.leanPill}>
+              <span className={styles.leanDot} aria-hidden />
+              {lean}
+            </span>
+          ) : (
+            <span className={styles.neutralLabel}>Neutral framing</span>
+          )}
+        </div>
+        <div className={styles.stripRight}>
+          {tag && <span className={styles.tagChip}>{tag}</span>}
+          <span className={styles.counter}>{position}/{total}</span>
+        </div>
+      </div>
+
+      {/* ── Image zone: 40% ── */}
+      <div className={styles.imageZone}>
+        {hasImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={article.image_url!}
             alt=""
-            className={styles.bgImg}
+            className={styles.image}
             loading="lazy"
             onError={() => setImgFailed(true)}
           />
-          <div className={styles.overlayTop} />
-        </div>
-      )}
-      {/* Gradient bridge from image into content area */}
-      {hasImage && <div className={styles.overlayTransition} aria-hidden />}
+        ) : (
+          <div className={styles.imagePlaceholder} />
+        )}
+      </div>
 
-      <div className={styles.content}>
-        {/* ── Top meta bar with frosted pill ── */}
-        <div className={styles.topBar}>
-          <div className={styles.metaPill}>
-            <span className={styles.source}>{sourceName}</span>
-            {leanMeta && (
-              <span
-                className={`${styles.leanPill} ${styles[`leanPill_${leanMeta.axis}`]} ${styles[`leanPill_${leanMeta.strength}`]}`}
-                title={leanMeta.label}
-              >
-                <span className={styles.leanDot} aria-hidden />
-                <span className={styles.leanLabel}>{leanMeta.label}</span>
+      {/* ── Text zone: 50% ── */}
+      <div className={styles.textZone}>
+        {/* Source row */}
+        <div className={styles.sourceRow}>
+          <span className={styles.sourceAvatar}>{sourceInit}</span>
+          <span className={styles.sourceName}>{sourceName}</span>
+          <span className={styles.age}>{age}</span>
+        </div>
+
+        {/* Headline */}
+        <h2 className={styles.headline}>{article.headline}</h2>
+
+        {/* Summary */}
+        {article.summary && (
+          <p className={styles.summary}>{article.summary}</p>
+        )}
+
+        {/* Footer: sources pill left · read btn right */}
+        <div className={styles.footer}>
+          {sourceCount && sourceCount >= 2 && article.cluster_id ? (
+            <Link
+              href={`/story/${article.cluster_id}`}
+              className={styles.sourcesPill}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className={styles.sourceDots}>
+                {Array.from({ length: Math.min(sourceCount, 3) }).map((_, i) => (
+                  <span key={i} className={styles.sourceDot} />
+                ))}
               </span>
-            )}
-            {tag && (
-              <>
-                <span className={styles.metaDivider} aria-hidden>
-                  ·
-                </span>
-                <span className={styles.tag}>{tag}</span>
-              </>
-            )}
-          </div>
-          <div className={styles.metaPill}>
-            <span className={styles.age}>{age}</span>
-            <span className={styles.metaDivider} aria-hidden>
-              ·
-            </span>
-            <span className={styles.counter}>
-              {position}/{total}
-            </span>
-          </div>
-        </div>
+              <span className={styles.sourcesLabel}>{sourceCount} sources covered this</span>
+            </Link>
+          ) : (
+            <span className={styles.singleSource}>Single source</span>
+          )}
 
-        {/* ── Spacer pushes body to bottom ── */}
-        <div className={styles.spacer} />
-
-        {/* ── Body: headline + summary ── */}
-        <div className={styles.body}>
-          <h2 className={styles.headline}>{article.headline}</h2>
-
-          {article.summary && <p className={styles.summary}>{article.summary}</p>}
-
-          {/* ── Actions ── */}
-          <div className={styles.actions}>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.readBtn}
-            >
-              Read full story
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden>
-                <path
-                  d="M1 10L10 1M10 1H4M10 1V7"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </a>
-
-            {article.cluster_id && sourceCount && sourceCount >= 2 && (
-              <Link href={`/story/${article.cluster_id}`} className={styles.compareBtn}>
-                {sourceCount} sources
-              </Link>
-            )}
-
-            <button
-              className={`${styles.saveBtn} ${saved ? styles.saveBtnActive : ""}`}
-              onClick={() => setSaved((v) => !v)}
-              aria-label={saved ? "Unsave" : "Save"}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                <path
-                  d="M3 2h10a1 1 0 0 1 1 1v11l-6-3-6 3V3a1 1 0 0 1 1-1z"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinejoin="round"
-                  fill={saved ? "currentColor" : "none"}
-                />
-              </svg>
-            </button>
-          </div>
+          <a
+            href={article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.readBtn}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Read ↗
+          </a>
         </div>
       </div>
+
     </article>
   );
 }

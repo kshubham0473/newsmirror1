@@ -2,15 +2,14 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import ArticleCard from "./ArticleCard";
 import CardFeed from "./CardFeed";
-import TopBar from "../ui/TopBar";
-import TopicFilter from "../ui/TopicFilter";
-import Onboarding from "../ui/Onboarding";
+import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
 
@@ -20,30 +19,17 @@ interface Props {
   initialArticles: Article[];
 }
 
-type ViewMode = "cards" | "list";
-
-/**
- * Round-robin topic diversity sort.
- * Groups articles by their primary topic tag, then interleaves them so the
- * feed cycles through topics rather than showing 8 politics stories in a row.
- * Within each topic group articles stay in chronological (newest-first) order.
- * Articles with no topic tag are appended at the end.
- */
 function diversifyByTopic(articles: Article[]): Article[] {
   const grouped = new Map<string, Article[]>();
   const untagged: Article[] = [];
 
   for (const article of articles) {
     const tag = article.topic_tags?.[0];
-    if (!tag) {
-      untagged.push(article);
-      continue;
-    }
+    if (!tag) { untagged.push(article); continue; }
     if (!grouped.has(tag)) grouped.set(tag, []);
     grouped.get(tag)!.push(article);
   }
 
-  // Interleave: take one from each group in rotation until all are consumed
   const buckets = Array.from(grouped.values());
   const result: Article[] = [];
   let i = 0;
@@ -52,7 +38,6 @@ function diversifyByTopic(articles: Article[]): Article[] {
     if (bucket.length > 0) result.push(bucket.shift()!);
     i++;
   }
-
   return [...result, ...untagged];
 }
 
@@ -62,34 +47,22 @@ export default function FeedClient({ initialArticles }: Props) {
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
-  const [activeSource, setActiveSource] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
+  const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
+  const [activeSource, setActiveSource] = useState<string | null>(null);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
   }, [loaded, prefs.onboardingDone]);
 
+  // Always card-only now — list mode removed in rebrand
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("nm_view") as ViewMode | null;
-      if (saved === "list" || saved === "cards") setViewMode(saved);
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
+    document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = "auto"; };
-  }, [viewMode]);
-
-  const setView = (mode: ViewMode) => {
-    setViewMode(mode);
-    try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
-  };
+  }, []);
 
   const handleRefresh = useCallback(() => {
     setIsReloading(true);
@@ -98,9 +71,7 @@ export default function FeedClient({ initialArticles }: Props) {
   }, [router]);
 
   const handleRefreshClick = useCallback(() => {
-    try {
-      localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
-    } catch { /* ignore */ }
+    try { localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString()); } catch { /* ignore */ }
     handleRefresh();
     setTimeout(() => refreshBannerRef.current?.check(), 1000);
   }, [handleRefresh]);
@@ -117,9 +88,7 @@ export default function FeedClient({ initialArticles }: Props) {
 
   const effectiveSources = activeSource
     ? [activeSource]
-    : prefs.sources.length > 0
-    ? prefs.sources
-    : null;
+    : prefs.sources.length > 0 ? prefs.sources : null;
 
   const filtered = useMemo(() => {
     const base = initialArticles.filter((a) => {
@@ -128,21 +97,10 @@ export default function FeedClient({ initialArticles }: Props) {
         if (!a.topic_tags?.some((t) => prefs.topics.includes(t as TopicId))) return false;
       }
       if (effectiveSources && !effectiveSources.includes(a.source_id)) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!a.headline.toLowerCase().includes(q) && !a.summary?.toLowerCase().includes(q)) return false;
-      }
       return true;
     });
-
-    // Apply topic diversity only when not already filtered to a single topic
     return activeTopic ? base : diversifyByTopic(base);
-  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, search]);
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today   = filtered.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
-  const earlier = filtered.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
+  }, [initialArticles, activeTopic, prefs.topics, effectiveSources]);
 
   const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });
@@ -152,31 +110,85 @@ export default function FeedClient({ initialArticles }: Props) {
   const busy = isRefreshing || isReloading;
 
   return (
-    <div className={`${styles.shell} ${viewMode === "list" ? styles.listMode : ""}`}>
+    <div className={styles.shell}>
+
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
       )}
 
-      <TopBar
-        search={search}
-        onSearchChange={setSearch}
-        viewMode={viewMode}
-        onViewModeChange={setView}
-        onSettingsClick={() => setShowOnboarding(true)}
-        isRefreshing={busy}
-        onRefreshClick={handleRefreshClick}
-      />
+      {/* ── Top bar ── */}
+      <header className={styles.topbar}>
+        <div className={styles.wordmark}>
+          News<span>Mirror</span>
+        </div>
+        <div className={styles.topbarRight}>
+          <button
+            className={`${styles.iconBtn} ${busy ? styles.iconBtnSpin : ""}`}
+            onClick={handleRefreshClick}
+            aria-label="Refresh feed"
+            disabled={busy}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4A5 5 0 0 1 12 7h-1.5M2 4V1.5M2 4h2.5M12 10A5 5 0 0 1 2 7h1.5M12 10V12.5M12 10h-2.5"
+                stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className={`${styles.iconBtn} ${sourceFilterOpen ? styles.iconBtnActive : ""}`}
+            onClick={() => setSourceFilterOpen((v) => !v)}
+            aria-label="Filter by source"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 3.5h12M3.5 7h7M6 10.5h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
 
-      <TopicFilter
-        topics={TOPICS as unknown as { id: string; label: string }[]}
-        activeTopic={activeTopic}
-        onTopicChange={(id) => setActiveTopic(id as TopicId | null)}
-        savedTopics={prefs.topics}
-        sources={allSources}
-        activeSource={activeSource}
-        onSourceChange={setActiveSource}
-      />
+      {/* ── Source filter dropdown ── */}
+      {sourceFilterOpen && (
+        <>
+          <div className={styles.backdrop} onClick={() => setSourceFilterOpen(false)} />
+          <div className={styles.sourceDropdown}>
+            <button
+              className={`${styles.sourceOption} ${!activeSource ? styles.sourceOptionActive : ""}`}
+              onClick={() => { setActiveSource(null); setSourceFilterOpen(false); }}
+            >
+              All sources
+            </button>
+            {allSources.map((s) => (
+              <button
+                key={s.id}
+                className={`${styles.sourceOption} ${activeSource === s.id ? styles.sourceOptionActive : ""}`}
+                onClick={() => { setActiveSource(s.id); setSourceFilterOpen(false); }}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
+      {/* ── Topic pill bar ── */}
+      <div className={styles.topicBar}>
+        <button
+          className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
+          onClick={() => setActiveTopic(null)}
+        >
+          All
+        </button>
+        {TOPICS.map((t) => (
+          <button
+            key={t.id}
+            className={`${styles.topicPill} ${activeTopic === t.id ? styles.topicPillActive : ""}`}
+            onClick={() => setActiveTopic(t.id as TopicId)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Refresh progress bar ── */}
       {busy && (
         <div className={styles.progressBar} aria-hidden>
           <div className={styles.progressFill} />
@@ -189,54 +201,54 @@ export default function FeedClient({ initialArticles }: Props) {
         onCheckingChange={setIsRefreshing}
       />
 
+      {/* ── Card feed ── */}
       {busy ? (
-        <div className={styles.skeletonStack} aria-hidden>
+        <div className={styles.skeleton} aria-hidden>
           <div className={styles.skelCard} />
-          <div className={styles.skelLines}>
-            <div className={styles.skelLine} />
-            <div className={styles.skelLineShort} />
-            <div className={styles.skelLine} />
-            <div className={styles.skelLineShort} />
-          </div>
         </div>
-      ) : viewMode === "cards" ? (
-        <CardFeed articles={filtered} />
       ) : (
-        <main className={styles.listMain}>
-          {filtered.length === 0 ? (
-            <div className={styles.empty}>
-              <p>No stories match your filters.</p>
-            </div>
-          ) : (
-            <>
-              {today.length > 0 && (
-                <section>
-                  <h2 className={styles.sectionLabel}>Today</h2>
-                  <div className={styles.grid}>
-                    {today.map((article, i) => (
-                      <ArticleCard
-                        key={article.id}
-                        article={article}
-                        featured={i === 0 && !activeTopic}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-              {earlier.length > 0 && (
-                <section>
-                  <h2 className={styles.sectionLabel}>Earlier</h2>
-                  <div className={styles.grid}>
-                    {earlier.map((article) => (
-                      <ArticleCard key={article.id} article={article} featured={false} />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          )}
-        </main>
+        <CardFeed articles={filtered.length > 0 ? filtered : initialArticles} />
       )}
+
+      {/* ── Bottom nav ── */}
+      <nav className={styles.bottomNav} aria-label="Main navigation">
+        <button className={`${styles.navBtn} ${styles.navBtnActive}`} aria-label="Feed" aria-current="page">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+          </svg>
+        </button>
+
+        <Link href="/sources" className={styles.navBtn} aria-label="Sources">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M2 5h14M2 9h10M2 13h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </Link>
+
+        <div className={styles.navDivider} aria-hidden />
+
+        <button
+          className={styles.navBtn}
+          aria-label="Profile"
+          onClick={() => setShowOnboarding(true)}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        <Link href="/methodology" className={styles.navBtn} aria-label="Settings">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4"
+              stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+        </Link>
+      </nav>
+
     </div>
   );
 }
