@@ -26,13 +26,13 @@ export default async function FeedPage() {
   if (error) console.error("Feed fetch error:", error);
 
   // Fetch source counts per cluster for the articles we got
-  const clusterIds = [
-    ...new Set(
+  const clusterIds = Array.from(
+    new Set(
       (data ?? [])
         .flatMap((a: any) => a.article_clusters?.map((ac: any) => ac.cluster_id) ?? [])
         .filter(Boolean)
-    ),
-  ];
+    )
+  );
 
   let clusterSourceCounts: Record<string, number> = {};
   if (clusterIds.length > 0) {
@@ -57,4 +57,3 @@ export default async function FeedPage() {
 
   return <FeedClient initialArticles={articles as any} />;
 }
-
