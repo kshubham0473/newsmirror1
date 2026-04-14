@@ -12,7 +12,7 @@ import TopicFilter from "../ui/TopicFilter";
 import Onboarding from "../ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
-
+import { useAuth } from "@/lib/useAuth";
 const LAST_SEEN_KEY = "nm_last_seen";
 
 interface Props {
@@ -56,10 +56,13 @@ function diversifyByTopic(articles: Article[]): Article[] {
 }
 
 export default function FeedClient({ initialArticles }: Props) {
-  const { prefs, loaded, save } = usePreferences();
+//  const { prefs, loaded, save } = usePreferences();
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
+
+const { user } = useAuth();
+const { prefs, loaded, save } = usePreferences(user);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
