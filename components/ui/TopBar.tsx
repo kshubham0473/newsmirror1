@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useTheme } from "@/components/ui/ThemeProvider";
+import { useAuth } from "@/lib/useAuth";
 import styles from "./TopBar.module.css";
 
 type ViewMode = "cards" | "list";
@@ -28,8 +29,8 @@ export default function TopBar({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const { theme, toggle: toggleTheme } = useTheme();
+  const { user, loading: authLoading, signIn, signOut } = useAuth();
 
-  // Close overflow when clicking outside
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
@@ -39,6 +40,13 @@ export default function TopBar({
     if (overflowOpen) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [overflowOpen]);
+
+  // Derive a display name / initials from Google user metadata
+  const displayName: string = user?.user_metadata?.full_name ?? user?.email ?? "";
+  const initials = displayName
+    ? displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "";
+  const avatarUrl: string | null = user?.user_metadata?.avatar_url ?? null;
 
   return (
     <header className={styles.bar}>
@@ -110,7 +118,7 @@ export default function TopBar({
             </button>
           )}
 
-          {/* Refresh indicator — spins while isRefreshing */}
+          {/* Refresh */}
           <button
             className={`${styles.iconBtn} ${isRefreshing ? styles.iconBtnSpinning : ""}`}
             aria-label="Checking for new stories"
@@ -146,22 +154,73 @@ export default function TopBar({
             )}
           </button>
 
-          {/* Overflow "…" — settings + admin + sources */}
+          {/* Overflow "…" menu */}
           <div className={styles.overflowWrap} ref={overflowRef}>
             <button
               className={`${styles.iconBtn} ${overflowOpen ? styles.iconBtnActive : ""}`}
               onClick={() => setOverflowOpen((v) => !v)}
               aria-label="More options"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="4" cy="8" r="1.2" fill="currentColor"/>
-                <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
-                <circle cx="12" cy="8" r="1.2" fill="currentColor"/>
-              </svg>
+              {/* Show avatar if signed in, else dots */}
+              {user && !authLoading ? (
+                avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    className={styles.avatarImg}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className={styles.avatarInitials}>{initials || "?"}</span>
+                )
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="4" cy="8" r="1.2" fill="currentColor"/>
+                  <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+                  <circle cx="12" cy="8" r="1.2" fill="currentColor"/>
+                </svg>
+              )}
             </button>
 
             {overflowOpen && (
               <div className={styles.overflowMenu}>
+
+                {/* Auth row */}
+                {!authLoading && (
+                  user ? (
+                    <>
+                      <div className={styles.overflowUser}>
+                        <span className={styles.overflowUserName}>{displayName}</span>
+                        <span className={styles.overflowUserEmail}>{user.email}</span>
+                      </div>
+                      <div className={styles.overflowDivider} />
+                      <button
+                        className={`${styles.overflowItem} ${styles.overflowSignOut}`}
+                        onClick={() => { signOut(); setOverflowOpen(false); }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                          <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M10 11l3-3-3-3M13 8H6"/>
+                        </svg>
+                        Sign out
+                      </button>
+                      <div className={styles.overflowDivider} />
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className={`${styles.overflowItem} ${styles.overflowSignIn}`}
+                        onClick={() => { signIn(); setOverflowOpen(false); }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                          <path d="M10 2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3M7 11l3-3-3-3M10 8H3"/>
+                        </svg>
+                        Sign in with Google
+                      </button>
+                      <div className={styles.overflowDivider} />
+                    </>
+                  )
+                )}
+
                 <button
                   className={styles.overflowItem}
                   onClick={() => { onSettingsClick(); setOverflowOpen(false); }}
