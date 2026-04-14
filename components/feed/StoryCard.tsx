@@ -75,6 +75,7 @@ export default function StoryCard({ article, isActive, position, total }: Props)
   const age = timeAgo(article.published_at ?? article.ingested_at);
   const tag = article.topic_tags?.[0];
   const leanMeta = getLeanMeta(article);
+  const sourceCount = article.cluster_source_count ?? null;
 
   return (
     <article
