@@ -7,7 +7,13 @@
   position: relative;
 }
 
-/* ── Top bar ──────────────────────────────────────────── */
+.listShell {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+/* ── Top bar ────────────────────────────────────────────── */
 
 .topbar {
   flex-shrink: 0;
@@ -29,72 +35,43 @@
 
 .wordmark span {
   color: var(--card-blush);
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
-[data-theme="light"] .wordmark span {
-  color: #c4611a;
-  opacity: 0.7;
-}
-
-.topbarRight {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-}
+.topbarRight { display: flex; gap: 7px; align-items: center; }
 
 .iconBtn {
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.07);
-  border: 0.5px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255,255,255,0.07);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.5);
   cursor: pointer;
   transition: background 0.15s;
-  flex-shrink: 0;
 }
 
-.iconBtn:hover { background: rgba(255, 255, 255, 0.12); }
-.iconBtnActive { background: rgba(255, 255, 255, 0.14) !important; color: #fff !important; }
+.iconBtn:hover        { background: rgba(255,255,255,0.12); }
+.iconBtnActive        { background: rgba(255,255,255,0.15) !important; color: #fff !important; }
 
-[data-theme="light"] .iconBtn {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.5);
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+.iconBtnSpin svg { animation: spin 0.9s linear infinite; }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* ── Source dropdown ───────────────────────────────────── */
 
-.iconBtnSpin svg {
-  animation: spin 0.9s linear infinite;
-}
-
-/* ── Source filter dropdown ───────────────────────────── */
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-}
+.backdrop { position: fixed; inset: 0; z-index: 60; }
 
 .sourceDropdown {
   position: absolute;
-  top: 50px;
-  right: 18px;
+  top: 50px; right: 18px;
   z-index: 70;
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--r-md);
   padding: 4px;
   min-width: 180px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  animation: dropIn 0.15s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: dropIn 0.14s ease;
 }
 
 @keyframes dropIn {
@@ -103,27 +80,17 @@
 }
 
 .sourceOption {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  font-size: 13px;
+  display: block; width: 100%; text-align: left;
+  padding: 9px 12px; font-size: 13px;
   color: var(--text-secondary);
   border-radius: var(--r-sm);
   transition: background 0.1s, color 0.1s;
 }
 
-.sourceOption:hover {
-  background: var(--surface-2);
-  color: var(--text-primary);
-}
+.sourceOption:hover        { background: var(--surface-2); color: var(--text-primary); }
+.sourceOptionActive        { color: var(--text-primary); font-weight: 500; }
 
-.sourceOptionActive {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-/* ── Topic pill bar ───────────────────────────────────── */
+/* ── Topic pill bar ─────────────────────────────────────── */
 
 .topicBar {
   flex-shrink: 0;
@@ -140,46 +107,32 @@
 
 .topicPill {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.06);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px; font-weight: 500;
+  color: rgba(255,255,255,0.38);
+  background: rgba(255,255,255,0.05);
+  border: 0.5px solid rgba(255,255,255,0.07);
   border-radius: 99px;
   padding: 4px 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
   font-family: var(--font-body);
+  transition: all 0.15s;
 }
 
-.topicPill:hover {
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
-}
+.topicPill:hover { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.09); }
 
 .topicPillActive {
-  background: var(--pill-active-bg) !important;
-  color: var(--pill-active-text) !important;
+  background: #fff !important;
+  color: #111 !important;
   border-color: transparent !important;
   font-weight: 600;
 }
 
-[data-theme="light"] .topicPill {
-  color: rgba(0, 0, 0, 0.4);
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.07);
-}
-
-[data-theme="light"] .topicPill:hover {
-  color: rgba(0, 0, 0, 0.7);
-}
-
-/* ── Progress bar ─────────────────────────────────────── */
+/* ── Progress bar ───────────────────────────────────────── */
 
 .progressBar {
   height: 2px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255,255,255,0.05);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -196,119 +149,126 @@
   100% { width: 0;   margin-left: 100%; }
 }
 
-/* ── Skeleton ─────────────────────────────────────────── */
+/* ── Skeleton ───────────────────────────────────────────── */
 
 .skeleton {
   flex: 1;
+  display: flex; align-items: center; justify-content: center;
   padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .skelCard {
-  width: 100%;
-  max-width: 380px;
-  height: 520px;
+  width: 100%; max-width: 380px; height: 520px;
   border-radius: var(--r-xl);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255,255,255,0.04);
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
-@keyframes shimmer {
-  0%, 100% { opacity: 0.4; }
-  50%       { opacity: 0.7; }
+@keyframes shimmer { 0%,100% { opacity: 0.4; } 50% { opacity: 0.7; } }
+
+/* ── List view ──────────────────────────────────────────── */
+
+.listMain {
+  max-width: var(--max-w);
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem var(--page-pad) 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-/* ── Bottom nav ───────────────────────────────────────── */
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
 
-.bottomNav {
+.listGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  display: flex; align-items: center; justify-content: center;
+  padding: 4rem 0;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+/* ── Connected bottom nav ───────────────────────────────── */
+
+.bottomNavWrap {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 16px 20px;
+  padding: 10px 16px 24px;
+  /* In list mode, stick to bottom of viewport */
 }
 
-/* Inner floating pill */
-.bottomNav::before {
-  content: none;
+.listShell .bottomNavWrap {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(17,17,17,0.95) 60%, transparent);
+  z-index: 100;
 }
 
-.navPill {
+/* The connected pill — buttons joined by thin paths */
+.bottomNav {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255,255,255,0.07);
+  border: 0.5px solid rgba(255,255,255,0.1);
   border-radius: 99px;
-  padding: 6px 8px;
-}
-
-/* Wrap the nav buttons in a pill — done via the nav itself */
-.bottomNav {
-  background: rgba(255, 255, 255, 0.06);
-  border: 0.5px solid rgba(255, 255, 255, 0.09);
-  border-radius: 99px;
-  padding: 6px 8px;
-  width: fit-content;
-  margin: 0 auto 20px;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-[data-theme="light"] .bottomNav {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.08);
+  padding: 5px;
+  gap: 0;
 }
 
 .navBtn {
-  width: 46px;
-  height: 46px;
-  border-radius: 99px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.35);
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.32);
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
   text-decoration: none;
-}
-
-.navBtn:hover {
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.navBtnActive {
-  background: #ffffff !important;
-  color: #111111 !important;
-}
-
-[data-theme="light"] .navBtn {
-  color: rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="light"] .navBtn:hover {
-  color: rgba(0, 0, 0, 0.7);
-}
-
-[data-theme="light"] .navBtnActive {
-  background: #111111 !important;
-  color: #ffffff !important;
-}
-
-.navDivider {
-  width: 0.5px;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 0 2px;
+  transition: color 0.15s, background 0.15s;
   flex-shrink: 0;
 }
 
-[data-theme="light"] .navDivider {
-  background: rgba(0, 0, 0, 0.1);
+.navBtn:hover  { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.06); }
+.navBtnActive  { background: #ffffff !important; color: #111111 !important; }
+
+/* Connector — thin curved bridge between nav buttons */
+.navConnector {
+  width: 18px;
+  height: 2px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 99px;
+  flex-shrink: 0;
+  position: relative;
 }
+
+/* Subtle curve effect using pseudo-elements */
+.navConnector::before,
+.navConnector::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.navConnector::before { left: -2px; }
+.navConnector::after  { right: -2px; }

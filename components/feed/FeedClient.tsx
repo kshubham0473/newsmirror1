@@ -19,17 +19,17 @@ interface Props {
   initialArticles: Article[];
 }
 
+type ViewMode = "cards" | "list";
+
 function diversifyByTopic(articles: Article[]): Article[] {
   const grouped = new Map<string, Article[]>();
   const untagged: Article[] = [];
-
   for (const article of articles) {
     const tag = article.topic_tags?.[0];
     if (!tag) { untagged.push(article); continue; }
     if (!grouped.has(tag)) grouped.set(tag, []);
     grouped.get(tag)!.push(article);
   }
-
   const buckets = Array.from(grouped.values());
   const result: Article[] = [];
   let i = 0;
@@ -47,6 +47,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -58,11 +59,10 @@ export default function FeedClient({ initialArticles }: Props) {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
   }, [loaded, prefs.onboardingDone]);
 
-  // Always card-only now — list mode removed in rebrand
   useEffect(() => {
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
     return () => { document.body.style.overflow = "auto"; };
-  }, []);
+  }, [viewMode]);
 
   const handleRefresh = useCallback(() => {
     setIsReloading(true);
@@ -79,9 +79,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
     for (const a of initialArticles) {
-      if (a.sources && !seen.has(a.source_id)) {
-        seen.set(a.source_id, a.sources.name);
-      }
+      if (a.sources && !seen.has(a.source_id)) seen.set(a.source_id, a.sources.name);
     }
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [initialArticles]);
@@ -108,9 +106,15 @@ export default function FeedClient({ initialArticles }: Props) {
   };
 
   const busy = isRefreshing || isReloading;
+  const displayArticles = filtered.length > 0 ? filtered : initialArticles;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today   = displayArticles.filter((a) => a.published_at && new Date(a.published_at) >= todayStart);
+  const earlier = displayArticles.filter((a) => !a.published_at || new Date(a.published_at) < todayStart);
 
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${viewMode === "list" ? styles.listShell : ""}`}>
 
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
@@ -118,14 +122,12 @@ export default function FeedClient({ initialArticles }: Props) {
 
       {/* ── Top bar ── */}
       <header className={styles.topbar}>
-        <div className={styles.wordmark}>
-          News<span>Mirror</span>
-        </div>
+        <div className={styles.wordmark}>News<span>Mirror</span></div>
         <div className={styles.topbarRight}>
           <button
             className={`${styles.iconBtn} ${busy ? styles.iconBtnSpin : ""}`}
             onClick={handleRefreshClick}
-            aria-label="Refresh feed"
+            aria-label="Refresh"
             disabled={busy}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -145,7 +147,7 @@ export default function FeedClient({ initialArticles }: Props) {
         </div>
       </header>
 
-      {/* ── Source filter dropdown ── */}
+      {/* ── Source dropdown ── */}
       {sourceFilterOpen && (
         <>
           <div className={styles.backdrop} onClick={() => setSourceFilterOpen(false)} />
@@ -153,17 +155,13 @@ export default function FeedClient({ initialArticles }: Props) {
             <button
               className={`${styles.sourceOption} ${!activeSource ? styles.sourceOptionActive : ""}`}
               onClick={() => { setActiveSource(null); setSourceFilterOpen(false); }}
-            >
-              All sources
-            </button>
+            >All sources</button>
             {allSources.map((s) => (
               <button
                 key={s.id}
                 className={`${styles.sourceOption} ${activeSource === s.id ? styles.sourceOptionActive : ""}`}
                 onClick={() => { setActiveSource(s.id); setSourceFilterOpen(false); }}
-              >
-                {s.name}
-              </button>
+              >{s.name}</button>
             ))}
           </div>
         </>
@@ -174,79 +172,104 @@ export default function FeedClient({ initialArticles }: Props) {
         <button
           className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
           onClick={() => setActiveTopic(null)}
-        >
-          All
-        </button>
+        >All</button>
         {TOPICS.map((t) => (
           <button
             key={t.id}
             className={`${styles.topicPill} ${activeTopic === t.id ? styles.topicPillActive : ""}`}
             onClick={() => setActiveTopic(t.id as TopicId)}
-          >
-            {t.label}
-          </button>
+          >{t.label}</button>
         ))}
       </div>
 
-      {/* ── Refresh progress bar ── */}
       {busy && (
         <div className={styles.progressBar} aria-hidden>
           <div className={styles.progressFill} />
         </div>
       )}
 
-      <RefreshBanner
-        ref={refreshBannerRef}
-        onRefresh={handleRefresh}
-        onCheckingChange={setIsRefreshing}
-      />
+      <RefreshBanner ref={refreshBannerRef} onRefresh={handleRefresh} onCheckingChange={setIsRefreshing} />
 
-      {/* ── Card feed ── */}
+      {/* ── Content ── */}
       {busy ? (
         <div className={styles.skeleton} aria-hidden>
           <div className={styles.skelCard} />
         </div>
+      ) : viewMode === "cards" ? (
+        <CardFeed articles={displayArticles} />
       ) : (
-        <CardFeed articles={filtered.length > 0 ? filtered : initialArticles} />
+        <main className={styles.listMain}>
+          {displayArticles.length === 0 ? (
+            <div className={styles.empty}><p>No stories match your filters.</p></div>
+          ) : (
+            <>
+              {today.length > 0 && (
+                <section>
+                  <h2 className={styles.sectionLabel}>Today</h2>
+                  <div className={styles.listGrid}>
+                    {today.map((a, i) => <ArticleCard key={a.id} article={a} index={i} />)}
+                  </div>
+                </section>
+              )}
+              {earlier.length > 0 && (
+                <section>
+                  <h2 className={styles.sectionLabel}>Earlier</h2>
+                  <div className={styles.listGrid}>
+                    {earlier.map((a, i) => <ArticleCard key={a.id} article={a} index={today.length + i} />)}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </main>
       )}
 
-      {/* ── Bottom nav ── */}
-      <nav className={styles.bottomNav} aria-label="Main navigation">
-        <button className={`${styles.navBtn} ${styles.navBtnActive}`} aria-label="Feed" aria-current="page">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-            <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-            <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-            <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-          </svg>
-        </button>
+      {/* ── Connected bottom nav ── */}
+      <nav className={styles.bottomNavWrap} aria-label="Main navigation">
+        <div className={styles.bottomNav}>
+          {/* Feed / cards */}
+          <button
+            className={`${styles.navBtn} ${viewMode === "cards" ? styles.navBtnActive : ""}`}
+            onClick={() => setViewMode("cards")}
+            aria-label="Card feed"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            </svg>
+          </button>
 
-        <Link href="/sources" className={styles.navBtn} aria-label="Sources">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M2 5h14M2 9h10M2 13h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-        </Link>
+          {/* Connector */}
+          <div className={styles.navConnector} aria-hidden />
 
-        <div className={styles.navDivider} aria-hidden />
+          {/* List */}
+          <button
+            className={`${styles.navBtn} ${viewMode === "list" ? styles.navBtnActive : ""}`}
+            onClick={() => setViewMode("list")}
+            aria-label="List feed"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
 
-        <button
-          className={styles.navBtn}
-          aria-label="Profile"
-          onClick={() => setShowOnboarding(true)}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-        </button>
+          {/* Connector */}
+          <div className={styles.navConnector} aria-hidden />
 
-        <Link href="/methodology" className={styles.navBtn} aria-label="Settings">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4"
-              stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-        </Link>
+          {/* You / account */}
+          <button
+            className={styles.navBtn}
+            onClick={() => setShowOnboarding(true)}
+            aria-label="Your preferences"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
       </nav>
 
     </div>

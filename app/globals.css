@@ -1,6 +1,6 @@
 /* NewsMirror — Global Styles
-   Rebrand: Pastel cards · Plus Jakarta Sans headlines · Outfit body
-   Background: #111111 · Card colours: #FFE8E5 / #E0F1FF / #FFF2C5
+   Dark only. Pastel cards on #111111 background.
+   Plus Jakarta Sans headlines · Outfit body
 */
 
 :root {
@@ -45,9 +45,7 @@
   padding: 0;
 }
 
-html, body {
-  height: 100%;
-}
+html, body { height: 100%; }
 
 html {
   font-size: 16px;
@@ -66,10 +64,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+a { color: inherit; text-decoration: none; }
 
 button {
   font-family: var(--font-body);
@@ -79,10 +74,7 @@ button {
   color: inherit;
 }
 
-img {
-  display: block;
-  max-width: 100%;
-}
+img { display: block; max-width: 100%; }
 
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -101,21 +93,4 @@ img {
   overflow: hidden;
   clip: rect(0,0,0,0);
   white-space: nowrap;
-}
-
-/* Light mode — keeps pastel card identity, brightens chrome */
-[data-theme="light"] {
-  --bg:               #f0ede8;
-  --surface:          #e8e4de;
-  --surface-2:        #dedad3;
-  --border:           rgba(0, 0, 0, 0.07);
-  --border-hover:     rgba(0, 0, 0, 0.14);
-  --text-primary:     #111111;
-  --text-secondary:   #6b6760;
-  --text-tertiary:    #9e9990;
-  --accent:           #c4611a;
-  --accent-dim:       rgba(196, 97, 26, 0.1);
-  --pill-bg:          rgba(0, 0, 0, 0.05);
-  --pill-active-bg:   #111111;
-  --pill-active-text: #ffffff;
 }
