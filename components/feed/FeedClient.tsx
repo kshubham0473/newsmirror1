@@ -50,6 +50,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showYou, setShowYou] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
@@ -242,7 +243,9 @@ export default function FeedClient({ initialArticles }: Props) {
           </button>
 
           {/* Connector */}
-          <div className={styles.navConnector} aria-hidden />
+          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+          </svg>
 
           {/* List */}
           <button
@@ -256,13 +259,15 @@ export default function FeedClient({ initialArticles }: Props) {
           </button>
 
           {/* Connector */}
-          <div className={styles.navConnector} aria-hidden />
+          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+          </svg>
 
           {/* You / account */}
           <button
             className={styles.navBtn}
-            onClick={() => setShowOnboarding(true)}
-            aria-label="Your preferences"
+            onClick={() => setShowYou(true)}
+            aria-label="You"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
@@ -272,6 +277,73 @@ export default function FeedClient({ initialArticles }: Props) {
         </div>
       </nav>
 
+
+      {/* ── You sheet ── */}
+      {showYou && (
+        <>
+          <div className={styles.backdrop} onClick={() => setShowYou(false)} />
+          <div className={styles.youSheet}>
+            <div className={styles.youHandle} />
+
+            {/* Auth row */}
+            <div className={styles.youAuthRow}>
+              {user ? (
+                <>
+                  <div className={styles.youAvatar}>
+                    {user.user_metadata?.avatar_url
+                      ? <img src={user.user_metadata.avatar_url} alt="" referrerPolicy="no-referrer" className={styles.youAvatarImg} />
+                      : <span>{(user.user_metadata?.full_name ?? user.email ?? "?")[0].toUpperCase()}</span>
+                    }
+                  </div>
+                  <div className={styles.youUserInfo}>
+                    <span className={styles.youName}>{user.user_metadata?.full_name ?? "Signed in"}</span>
+                    <span className={styles.youEmail}>{user.email}</span>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.youSignIn}>
+                  <span className={styles.youSignInLabel}>Sign in to sync your preferences</span>
+                </div>
+              )}
+            </div>
+
+            {/* Menu items */}
+            <div className={styles.youMenu}>
+              <button className={styles.youItem} onClick={() => { setShowOnboarding(true); setShowYou(false); }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.3"/></svg>
+                <span>Interests & sources</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </button>
+
+              <Link href="/sources" className={styles.youItem} onClick={() => setShowYou(false)}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 7h8M5 10h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                <span>Source profiles</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </Link>
+
+              <Link href="/methodology" className={styles.youItem} onClick={() => setShowYou(false)}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.3"/><path d="M9 8v5M9 6h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                <span>How we classify</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </Link>
+
+              {user && (
+                <button className={`${styles.youItem} ${styles.youSignOutBtn}`} onClick={() => { /* signOut handled via useAuth */ setShowYou(false); }}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M7 2H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h3M11 13l4-4-4-4M15 9H7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Sign out</span>
+                </button>
+              )}
+
+              {!user && (
+                <button className={`${styles.youItem} ${styles.youSignInBtn}`} onClick={() => setShowYou(false)}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 2h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3M7 13l4-4-4-4M3 9h9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Sign in with Google</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

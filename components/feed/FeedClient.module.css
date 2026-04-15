@@ -249,26 +249,151 @@
 
 /* Connector — thin curved bridge between nav buttons */
 .navConnector {
-  width: 18px;
-  height: 2px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 99px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  position: relative;
+  display: block;
+  overflow: visible;
 }
 
-/* Subtle curve effect using pseudo-elements */
-.navConnector::before,
-.navConnector::after {
-  content: "";
-  position: absolute;
-  width: 6px;
-  height: 6px;
+
+/* ── You sheet ──────────────────────────────────────────── */
+
+.youSheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #1a1a1a;
+  border-radius: 24px 24px 0 0;
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-bottom: none;
+  padding: 12px 20px 40px;
+  z-index: 200;
+  animation: slideUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.youHandle {
+  width: 36px;
+  height: 4px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 99px;
+  margin: 0 auto 20px;
+}
+
+.youAuthRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 18px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.07);
+  margin-bottom: 8px;
+}
+
+.youAvatar {
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.06);
-  top: 50%;
-  transform: translateY(-50%);
+  background: rgba(255,232,229,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--card-blush);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-.navConnector::before { left: -2px; }
-.navConnector::after  { right: -2px; }
+.youAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.youUserInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.youName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youEmail {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.youSignIn {
+  padding: 4px 0;
+}
+
+.youSignInLabel {
+  font-size: 14px;
+  color: rgba(255,255,255,0.35);
+}
+
+.youMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.youItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 10px;
+  border-radius: var(--r-md);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font-family: var(--font-body);
+  transition: background 0.12s;
+}
+
+.youItem svg:first-child {
+  color: rgba(255,255,255,0.4);
+  flex-shrink: 0;
+}
+
+.youItem:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.youChevron {
+  margin-left: auto;
+  color: rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.youSignOutBtn { color: rgba(255,100,80,0.85); }
+.youSignOutBtn svg:first-child { color: rgba(255,100,80,0.5); }
+
+.youSignInBtn { color: var(--card-blush); }
+.youSignInBtn svg:first-child { color: rgba(255,232,229,0.5); }
