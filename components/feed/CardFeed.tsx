@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
 import StoryCard from "./StoryCard";
 import styles from "./CardFeed.module.css";
 
 interface Props {
   articles: Article[];
+  user?: User | null;
 }
 
-export default function CardFeed({ articles }: Props) {
+export default function CardFeed({ articles, user = null }: Props) {
   const [index, setIndex] = useState(0);
   const [flyDir, setFlyDir] = useState<"left" | "right" | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -85,12 +87,12 @@ export default function CardFeed({ articles }: Props) {
 
         {/* Back card 2 */}
         <div className={`${styles.slot} ${styles.back2}`} aria-hidden>
-          <StoryCard article={articles[nxt2]} isActive={false} position={(nxt2 % 3) + 1} total={total} />
+          <StoryCard article={articles[nxt2]} isActive={false} position={(nxt2 % 3) + 1} total={total} user={user} />
         </div>
 
         {/* Back card 1 */}
         <div className={`${styles.slot} ${styles.back1} ${flyDir ? styles.promote : ""}`} aria-hidden>
-          <StoryCard article={articles[nxt1]} isActive={false} position={(nxt1 % 3) + 1} total={total} />
+          <StoryCard article={articles[nxt1]} isActive={false} position={(nxt1 % 3) + 1} total={total} user={user} />
         </div>
 
         {/* Front card */}
@@ -105,7 +107,7 @@ export default function CardFeed({ articles }: Props) {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          <StoryCard article={articles[cur]} isActive={true} position={(cur % 3) + 1} total={total} isDragging={isDragging} />
+          <StoryCard article={articles[cur]} isActive={true} position={(cur % 3) + 1} total={total} isDragging={isDragging} user={user} />
         </div>
 
       </div>

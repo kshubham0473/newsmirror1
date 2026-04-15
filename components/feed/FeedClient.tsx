@@ -197,7 +197,7 @@ export default function FeedClient({ initialArticles }: Props) {
           <div className={styles.skelCard} />
         </div>
       ) : viewMode === "cards" ? (
-        <CardFeed articles={displayArticles} />
+        <CardFeed articles={displayArticles} user={user} />
       ) : (
         <main className={styles.listMain}>
           {displayArticles.length === 0 ? (
@@ -208,7 +208,7 @@ export default function FeedClient({ initialArticles }: Props) {
                 <section>
                   <h2 className={styles.sectionLabel}>Today</h2>
                   <div className={styles.listGrid}>
-                    {today.map((a, i) => <ArticleCard key={a.id} article={a} index={i} />)}
+                    {today.map((a, i) => <ArticleCard key={a.id} article={a} index={i} user={user} />)}
                   </div>
                 </section>
               )}
@@ -216,7 +216,7 @@ export default function FeedClient({ initialArticles }: Props) {
                 <section>
                   <h2 className={styles.sectionLabel}>Earlier</h2>
                   <div className={styles.listGrid}>
-                    {earlier.map((a, i) => <ArticleCard key={a.id} article={a} index={today.length + i} />)}
+                    {earlier.map((a, i) => <ArticleCard key={a.id} article={a} index={today.length + i} user={user} />)}
                   </div>
                 </section>
               )}

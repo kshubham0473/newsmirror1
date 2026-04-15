@@ -153,3 +153,43 @@
 }
 
 .readBtn:hover { color: var(--text-primary); }
+
+/* ── Reactions (Build 4A) ─────────────────────────────── */
+
+.reactions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 99px;
+  padding: 2px 3px;
+}
+
+.reactionBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.reactionBtn:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.reactionUp {
+  background: rgba(42, 122, 59, 0.15) !important;
+  color: #4caf6e !important;
+}
+
+.reactionDown {
+  background: rgba(196, 48, 26, 0.15) !important;
+  color: #e57368 !important;
+}

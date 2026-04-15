@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
+import { useReadingEvents } from "@/lib/useReadingEvents";
+import { useArticleReaction } from "@/lib/useArticleReaction";
 import styles from "./StoryCard.module.css";
 
 // Cycle through 3 pastel card colours by position
@@ -22,9 +25,10 @@ function timeAgo(dateStr: string | null): string {
 interface Props {
   article: Article;
   isActive: boolean;
-  position: number;   // 1-based, used for colour cycling
+  position: number;
   total: number;
   isDragging?: boolean;
+  user?: User | null;
 }
 
 function getLean(article: Article): string | null {
@@ -46,8 +50,10 @@ function getLean(article: Article): string | null {
   return scored[0].label;
 }
 
-export default function StoryCard({ article, position, total }: Props) {
+export default function StoryCard({ article, position, total, user = null }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const { trackRead } = useReadingEvents(user);
+  const { reaction, react } = useArticleReaction(user, article.id);
   const hasImage = !!article.image_url && !imgFailed;
   const sourceName = article.sources?.name ?? "Unknown";
   const sourceInit = sourceName.slice(0, 2).toUpperCase();
@@ -130,15 +136,39 @@ export default function StoryCard({ article, position, total }: Props) {
             <span className={styles.singleSource}>Single source</span>
           )}
 
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.readBtn}
-            onClick={(e) => e.stopPropagation()}
-          >
-            Read ↗
-          </a>
+          <div className={styles.footerRight}>
+            {user && (
+              <div className={styles.reactions}>
+                <button
+                  className={`${styles.reactionBtn} ${reaction === 1 ? styles.reactionUp : ""}`}
+                  onClick={(e) => { e.stopPropagation(); react(1); }}
+                  aria-label="Helpful"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M5 6V3a1 1 0 0 1 1-1l3 4v5H4.5a1 1 0 0 1-1-.8L3 7.5a1 1 0 0 1 1-1.5H5zM9 11V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                <button
+                  className={`${styles.reactionBtn} ${reaction === -1 ? styles.reactionDown : ""}`}
+                  onClick={(e) => { e.stopPropagation(); react(-1); }}
+                  aria-label="Not helpful"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M9 8v3a1 1 0 0 1-1 1L5 8V3h4.5a1 1 0 0 1 1 .8L11 6.5a1 1 0 0 1-1 1.5H9zM5 3v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.readBtn}
+              onClick={(e) => { e.stopPropagation(); trackRead({ articleId: article.id, sourceId: article.source_id }); }}
+            >
+              Read ↗
+            </a>
+          </div>
         </div>
       </div>
 
