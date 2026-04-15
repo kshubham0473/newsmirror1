@@ -1,7 +1,11 @@
 name: NewsMirror summarise (manual-only)
 
 on:
-  workflow_dispatch:
+  schedule:
+    # Fetch new articles every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
 
 permissions:
   issues: write
