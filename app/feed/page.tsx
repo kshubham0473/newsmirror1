@@ -24,6 +24,7 @@ export default async function FeedPage() {
     `)
     .not("summary", "is", null)
     .neq("summary", "")
+    .neq("summary", "[skipped]")
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("ingested_at", { ascending: false })
     .limit(FETCH_LIMIT);
