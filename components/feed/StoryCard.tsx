@@ -80,7 +80,6 @@ export default function StoryCard({ article, position, total, user = null }: Pro
         </div>
         <div className={styles.stripRight}>
           {tag && <span className={styles.tagChip}>{tag}</span>}
-          <span className={styles.counter}>{position}/{total}</span>
         </div>
       </div>
 

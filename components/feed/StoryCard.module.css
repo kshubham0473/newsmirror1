@@ -78,12 +78,6 @@
   white-space: nowrap;
 }
 
-.counter {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--card-text);
-  opacity: 0.25;
-}
 
 /* ── Image zone (40%) ─────────────────────────────────── */
 
