@@ -79,7 +79,7 @@
 }
 
 
-/* ── Image zone (40%) ─────────────────────────────────── */
+/* ── Image zone (38%) ─────────────────────────────────── */
 
 .imageZone {
   flex: 0 0 38%;
@@ -93,13 +93,24 @@
   display: block;
 }
 
-.imagePlaceholder {
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.07);
+/* ── No-image variant ─────────────────────────────────── */
+
+.cardNoImage .imageZone {
+  display: none;
 }
 
-/* ── Text zone (50%) ──────────────────────────────────── */
+/* More room for text when there's no image */
+.cardNoImage .headline {
+  -webkit-line-clamp: 5;
+  font-size: 17px;
+}
+
+.cardNoImage .summary {
+  -webkit-line-clamp: 6;
+  flex: 1;
+}
+
+/* ── Text zone ────────────────────────────────────────── */
 
 .textZone {
   flex: 1;

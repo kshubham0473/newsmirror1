@@ -64,7 +64,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
   const cardColor = CARD_COLORS[(position - 1) % 3];
 
   return (
-    <article className={styles.card} style={{ background: cardColor }}>
+    <article className={`${styles.card} ${!hasImage ? styles.cardNoImage : ""}`} style={{ background: cardColor }}>
 
       {/* ── Top strip: lean pill left · tag + counter right ── */}
       <div className={styles.strip}>
