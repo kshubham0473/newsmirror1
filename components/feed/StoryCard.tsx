@@ -118,7 +118,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
         <div className={styles.footer}>
           {sourceCount && sourceCount >= 2 && article.cluster_id ? (
             <Link
-              href={`/story/${article.cluster_id}`}
+              href={`/timeline/${article.cluster_id}`}
               className={styles.sourcesPill}
               onClick={(e) => e.stopPropagation()}
             >
