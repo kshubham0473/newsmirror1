@@ -64,7 +64,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
   const cardColor = CARD_COLORS[(position - 1) % 3];
 
   return (
-    <article className={styles.card} style={{ background: cardColor }}>
+    <article className={`${styles.card} ${!hasImage ? styles.cardNoImage : ""}`} style={{ background: cardColor }}>
 
       {/* ── Top strip: lean pill left · tag + counter right ── */}
       <div className={styles.strip}>
@@ -118,7 +118,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
         <div className={styles.footer}>
           {sourceCount && sourceCount >= 2 && article.cluster_id ? (
             <Link
-              href={`/story/${article.cluster_id}`}
+              href={`/timeline/${article.cluster_id}`}
               className={styles.sourcesPill}
               onClick={(e) => e.stopPropagation()}
             >

@@ -746,16 +746,135 @@ async function handleCluster(): Promise<Response> {
   return Response.json({ results, threshold: CLUSTER_THRESHOLD, timestamp: new Date().toISOString() });
 }
 
+// ─── HANDLER: ENRICH IMAGES ───────────────────────────────────────────────────
+//
+// For articles where image_url is null, fetch the article page and extract
+// og:image / twitter:image meta tags. Updates the DB when found.
+//
+// Safe to run repeatedly — only touches rows where image_url IS NULL.
+// Intentionally small batch (10) to stay well within Edge Function time limits.
+// One domain is hit at most once per run to avoid rate-limit blocks.
+
+async function fetchOgImage(articleUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(articleUrl, {
+      signal: AbortSignal.timeout(5_000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; NewsMirror/1.0; +https://newsmirror.in)",
+        "Accept": "text/html",
+      },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+
+    // Only read first 20 KB — the <head> is always at the top
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    let html = "";
+    let bytes = 0;
+    while (bytes < 20_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += new TextDecoder().decode(value);
+      bytes += value?.length ?? 0;
+      // Stop once we've passed </head>
+      if (html.includes("</head>")) break;
+    }
+    reader.cancel();
+
+    // og:image (preferred)
+    const ogMatch =
+      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (ogMatch?.[1]) return ogMatch[1];
+
+    // twitter:image (fallback)
+    const twMatch =
+      html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ??
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    if (twMatch?.[1]) return twMatch[1];
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleEnrichImages(): Promise<Response> {
+  const BATCH_SIZE = 10;
+  const results = { processed: 0, enriched: 0, skipped: 0, errors: 0 };
+
+  try {
+    // Only process recent articles (last 48h) without images — older ones aren't shown anyway
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, url")
+      .is("image_url", null)
+      .gte("ingested_at", cutoff)
+      .order("ingested_at", { ascending: false })
+      .limit(BATCH_SIZE);
+
+    if (error) throw error;
+    if (!articles?.length) {
+      return Response.json({ message: "No articles pending image enrichment", results });
+    }
+
+    // Track domains we've already hit this run — one fetch per domain max
+    const seenDomains = new Set<string>();
+
+    for (const article of articles) {
+      results.processed++;
+      try {
+        const domain = new URL((article as any).url).hostname;
+        if (seenDomains.has(domain)) {
+          // Space out hits per domain — allow up to 2 per run
+          const domainCount = [...seenDomains].filter((d) => d === domain).length;
+          if (domainCount >= 2) { results.skipped++; continue; }
+        }
+        seenDomains.add(domain);
+
+        const imageUrl = await fetchOgImage((article as any).url);
+        if (!imageUrl) { results.skipped++; continue; }
+
+        const { error: updateErr } = await supabase
+          .from("articles")
+          .update({ image_url: imageUrl })
+          .eq("id", (article as any).id);
+
+        if (updateErr) {
+          console.error("Image update error:", updateErr);
+          results.errors++;
+        } else {
+          results.enriched++;
+        }
+
+        // Polite delay between fetches
+        await new Promise((r) => setTimeout(r, 400));
+      } catch (e) {
+        console.error("Enrich error for article", (article as any).id, e);
+        results.errors++;
+      }
+    }
+  } catch (err) {
+    console.error("Fatal enrich-images error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const phase = url.searchParams.get("phase") ?? "ingest";
 
-  if (phase === "ingest")    return handleIngest();
-  if (phase === "summarise") return handleSummarise();
-  if (phase === "classify")  return handleClassify();
-  if (phase === "cluster")   return handleCluster();
+  if (phase === "ingest")         return handleIngest();
+  if (phase === "summarise")      return handleSummarise();
+  if (phase === "classify")       return handleClassify();
+  if (phase === "cluster")        return handleCluster();
+  if (phase === "enrich-images")  return handleEnrichImages();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });
