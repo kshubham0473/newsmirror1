@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useTheme } from "@/components/ui/ThemeProvider";
-import { useAuth } from "@/lib/useAuth";
+import { createClient } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 import styles from "./TopBar.module.css";
 
 type ViewMode = "cards" | "list";
@@ -27,8 +28,17 @@ export default function TopBar({
   isRefreshing,
   onRefreshClick,
 }: Props) {
-  const { user } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const { theme, toggle: toggleTheme } = useTheme();

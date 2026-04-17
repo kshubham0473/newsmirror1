@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
-import { useAuth } from "@/lib/useAuth";
+import { createClient } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 import ArticleCard from "./ArticleCard";
 import CardFeed from "./CardFeed";
 import TopBar from "../ui/TopBar";
@@ -67,8 +68,17 @@ function orderCardStack(articles: Article[]): Article[] {
 }
 
 export default function FeedClient({ initialArticles }: Props) {
-  const { user } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
   const { prefs, loaded, save } = usePreferences();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
