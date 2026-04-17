@@ -6,6 +6,20 @@ import type { Article } from "@/lib/types";
 import StoryCard from "./StoryCard";
 import styles from "./CardFeed.module.css";
 
+const SEEN_KEY = "nm_seen_cards";
+const SEEN_CAP = 200;
+
+function markSeen(articleId: string) {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(articleId)) {
+      const updated = [...ids, articleId].slice(-SEEN_CAP);
+      localStorage.setItem(SEEN_KEY, JSON.stringify(updated));
+    }
+  } catch { /* ignore */ }
+}
+
 interface Props {
   articles: Article[];
   user?: User | null;
@@ -30,6 +44,11 @@ export default function CardFeed({ articles, user = null }: Props) {
   const dismiss = useCallback((dir: "left" | "right") => {
     if (animating.current) return;
     animating.current = true;
+
+    // Persist the current card as seen before advancing
+    const currentArticle = articles[index % articles.length];
+    if (currentArticle) markSeen(currentArticle.id);
+
     setFlyDir(dir);
     setDragX(0);
     setDragY(0);
@@ -38,7 +57,7 @@ export default function CardFeed({ articles, user = null }: Props) {
       setFlyDir(null);
       animating.current = false;
     }, 320);
-  }, [total]);
+  }, [total, articles, index]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (animating.current) return;

@@ -16,6 +16,16 @@ import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/Refresh
 import styles from "./FeedClient.module.css";
 
 const LAST_SEEN_KEY = "nm_last_seen";
+const SEEN_CARDS_KEY = "nm_seen_cards";
+
+function readSeenIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(SEEN_CARDS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
 
 interface Props {
   initialArticles: Article[];
@@ -82,6 +92,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
@@ -93,6 +104,11 @@ export default function FeedClient({ initialArticles }: Props) {
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
   }, [loaded, prefs.onboardingDone]);
+
+  // Read seen card IDs from localStorage on mount so fresh stories always surface first
+  useEffect(() => {
+    setSeenIds(readSeenIds());
+  }, []);
 
   useEffect(() => {
     try {
@@ -155,9 +171,14 @@ export default function FeedClient({ initialArticles }: Props) {
       return true;
     });
 
-    // Apply topic diversity only when not already filtered to a single topic
-    return activeTopic ? base : orderCardStack(base);
-  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, search]);
+    if (activeTopic) return base;
+
+    // Split into unseen and already-swiped, apply topic diversity to each bucket,
+    // then surface unseen stories first so returning users see fresh content.
+    const unseen = base.filter((a) => !seenIds.has(a.id));
+    const seen   = base.filter((a) =>  seenIds.has(a.id));
+    return [...orderCardStack(unseen), ...orderCardStack(seen)];
+  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, search, seenIds]);
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
