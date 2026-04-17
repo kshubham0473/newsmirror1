@@ -6,18 +6,17 @@ import Link from "next/link";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
-import { createClient } from "@/lib/supabase";
-import type { User } from "@supabase/supabase-js";
+import { useAuth } from "@/lib/useAuth";
 import ArticleCard from "./ArticleCard";
 import CardFeed from "./CardFeed";
-import TopBar from "../ui/TopBar";
-import TopicFilter from "../ui/TopicFilter";
-import Onboarding from "../ui/Onboarding";
+import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import styles from "./FeedClient.module.css";
 
 const LAST_SEEN_KEY = "nm_last_seen";
 const SEEN_CARDS_KEY = "nm_seen_cards";
+const SEEN_CAP = 200;
+const ADMIN_EMAIL = "shubhamk0473@gmail.com";
 
 function readSeenIds(): Set<string> {
   try {
@@ -34,13 +33,6 @@ interface Props {
 
 type ViewMode = "cards" | "list";
 
-/**
- * Dynamic card stack ordering.
- * Separates clustered stories (3+ sources) from singles, applies topic
- * round-robin within each group, then interleaves: 2 singles, 1 cluster.
- * This ensures significant multi-source stories surface consistently
- * without overwhelming the feed, while topic diversity is maintained.
- */
 function orderCardStack(articles: Article[]): Article[] {
   const clustered = articles.filter((a) => (a.cluster_source_count ?? 0) >= 3);
   const singles   = articles.filter((a) => (a.cluster_source_count ?? 0) < 3);
@@ -79,56 +71,34 @@ function orderCardStack(articles: Article[]): Article[] {
 }
 
 export default function FeedClient({ initialArticles }: Props) {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
-  const [activeSource, setActiveSource] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showYou, setShowYou] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
+  const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
+  const [activeSource, setActiveSource] = useState<string | null>(null);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
   }, [loaded, prefs.onboardingDone]);
 
-  // Read seen card IDs from localStorage on mount so fresh stories always surface first
+  // Read seen card IDs from localStorage on mount so fresh stories surface first
   useEffect(() => {
     setSeenIds(readSeenIds());
-  }, []);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("nm_view") as ViewMode | null;
-      if (saved === "list" || saved === "cards") setViewMode(saved);
-    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
     document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
     return () => { document.body.style.overflow = "auto"; };
   }, [viewMode]);
-
-  const setView = (mode: ViewMode) => {
-    setViewMode(mode);
-    try { localStorage.setItem("nm_view", mode); } catch { /* ignore */ }
-  };
 
   const handleRefresh = useCallback(() => {
     setIsReloading(true);
@@ -137,44 +107,33 @@ export default function FeedClient({ initialArticles }: Props) {
   }, [router]);
 
   const handleRefreshClick = useCallback(() => {
-    try {
-      localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
-    } catch { /* ignore */ }
+    try { localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString()); } catch { /* ignore */ }
     handleRefresh();
     setTimeout(() => refreshBannerRef.current?.check(), 1000);
   }, [handleRefresh]);
 
+  const handleSignIn = useCallback(async () => {
+    await signIn();
+    setShowYou(false);
+  }, [signIn]);
+
   const handleSignOut = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     setShowYou(false);
     router.refresh();
-  }, [router]);
-
-  const handleSignIn = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: typeof window !== "undefined" ? window.location.origin : "/" },
-    });
-    setShowYou(false);
-  }, []);
+  }, [signOut, router]);
 
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
     for (const a of initialArticles) {
-      if (a.sources && !seen.has(a.source_id)) {
-        seen.set(a.source_id, a.sources.name);
-      }
+      if (a.sources && !seen.has(a.source_id)) seen.set(a.source_id, a.sources.name);
     }
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
   }, [initialArticles]);
 
   const effectiveSources = activeSource
     ? [activeSource]
-    : prefs.sources.length > 0
-    ? prefs.sources
-    : null;
+    : prefs.sources.length > 0 ? prefs.sources : null;
 
   const filtered = useMemo(() => {
     const base = initialArticles.filter((a) => {
@@ -183,26 +142,16 @@ export default function FeedClient({ initialArticles }: Props) {
         if (!a.topic_tags?.some((t) => prefs.topics.includes(t as TopicId))) return false;
       }
       if (effectiveSources && !effectiveSources.includes(a.source_id)) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        if (!a.headline.toLowerCase().includes(q) && !a.summary?.toLowerCase().includes(q)) return false;
-      }
       return true;
     });
 
     if (activeTopic) return base;
 
-    // Split into unseen and already-swiped, apply topic diversity to each bucket,
-    // then surface unseen stories first so returning users see fresh content.
+    // Surface unseen stories first; already-swiped sink to the back
     const unseen = base.filter((a) => !seenIds.has(a.id));
     const seen   = base.filter((a) =>  seenIds.has(a.id));
     return [...orderCardStack(unseen), ...orderCardStack(seen)];
-  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, search, seenIds]);
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today   = filtered.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
-  const earlier = filtered.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
+  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, seenIds]);
 
   const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });
@@ -210,32 +159,81 @@ export default function FeedClient({ initialArticles }: Props) {
   };
 
   const busy = isRefreshing || isReloading;
+  const displayArticles = filtered.length > 0 ? filtered : initialArticles;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today   = displayArticles.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
+  const earlier = displayArticles.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
 
   return (
-    <div className={`${styles.shell} ${viewMode === "list" ? styles.listMode : ""}`}>
+    <div className={`${styles.shell} ${viewMode === "list" ? styles.listShell : ""}`}>
+
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
       )}
 
-      <TopBar
-        search={search}
-        onSearchChange={setSearch}
-        viewMode={viewMode}
-        onViewModeChange={setView}
-        onSettingsClick={() => setShowOnboarding(true)}
-        isRefreshing={busy}
-        onRefreshClick={handleRefreshClick}
-      />
+      {/* ── Top bar ── */}
+      <header className={styles.topbar}>
+        <div className={styles.wordmark}>News<span>Mirror</span></div>
+        <div className={styles.topbarRight}>
+          <button
+            className={`${styles.iconBtn} ${busy ? styles.iconBtnSpin : ""}`}
+            onClick={handleRefreshClick}
+            aria-label="Refresh"
+            disabled={busy}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4A5 5 0 0 1 12 7h-1.5M2 4V1.5M2 4h2.5M12 10A5 5 0 0 1 2 7h1.5M12 10V12.5M12 10h-2.5"
+                stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className={`${styles.iconBtn} ${sourceFilterOpen ? styles.iconBtnActive : ""}`}
+            onClick={() => setSourceFilterOpen((v) => !v)}
+            aria-label="Filter by source"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 3.5h12M3.5 7h7M6 10.5h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
 
-      <TopicFilter
-        topics={TOPICS as unknown as { id: string; label: string }[]}
-        activeTopic={activeTopic}
-        onTopicChange={(id) => setActiveTopic(id as TopicId | null)}
-        savedTopics={prefs.topics}
-        sources={allSources}
-        activeSource={activeSource}
-        onSourceChange={setActiveSource}
-      />
+      {/* ── Source dropdown ── */}
+      {sourceFilterOpen && (
+        <>
+          <div className={styles.backdrop} onClick={() => setSourceFilterOpen(false)} />
+          <div className={styles.sourceDropdown}>
+            <button
+              className={`${styles.sourceOption} ${!activeSource ? styles.sourceOptionActive : ""}`}
+              onClick={() => { setActiveSource(null); setSourceFilterOpen(false); }}
+            >All sources</button>
+            {allSources.map((s) => (
+              <button
+                key={s.id}
+                className={`${styles.sourceOption} ${activeSource === s.id ? styles.sourceOptionActive : ""}`}
+                onClick={() => { setActiveSource(s.id); setSourceFilterOpen(false); }}
+              >{s.name}</button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Topic pill bar ── */}
+      <div className={styles.topicBar}>
+        <button
+          className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
+          onClick={() => setActiveTopic(null)}
+        >All</button>
+        {TOPICS.map((t) => (
+          <button
+            key={t.id}
+            className={`${styles.topicPill} ${activeTopic === t.id ? styles.topicPillActive : ""}`}
+            onClick={() => setActiveTopic(t.id as TopicId)}
+          >{t.label}</button>
+        ))}
+      </div>
 
       {busy && (
         <div className={styles.progressBar} aria-hidden>
@@ -243,54 +241,34 @@ export default function FeedClient({ initialArticles }: Props) {
         </div>
       )}
 
-      <RefreshBanner
-        ref={refreshBannerRef}
-        onRefresh={handleRefresh}
-        onCheckingChange={setIsRefreshing}
-      />
+      <RefreshBanner ref={refreshBannerRef} onRefresh={handleRefresh} onCheckingChange={setIsRefreshing} />
 
+      {/* ── Content ── */}
       {busy ? (
-        <div className={styles.skeletonStack} aria-hidden>
+        <div className={styles.skeleton} aria-hidden>
           <div className={styles.skelCard} />
-          <div className={styles.skelLines}>
-            <div className={styles.skelLine} />
-            <div className={styles.skelLineShort} />
-            <div className={styles.skelLine} />
-            <div className={styles.skelLineShort} />
-          </div>
         </div>
       ) : viewMode === "cards" ? (
-        <CardFeed articles={filtered} user={user} />
+        <CardFeed articles={displayArticles} user={user} />
       ) : (
         <main className={styles.listMain}>
-          {filtered.length === 0 ? (
-            <div className={styles.empty}>
-              <p>No stories match your filters.</p>
-            </div>
+          {displayArticles.length === 0 ? (
+            <div className={styles.empty}><p>No stories match your filters.</p></div>
           ) : (
             <>
               {today.length > 0 && (
                 <section>
                   <h2 className={styles.sectionLabel}>Today</h2>
-                  <div className={styles.grid}>
-                    {today.map((article, i) => (
-                      <ArticleCard
-                        key={article.id}
-                        article={article}
-                        featured={i === 0 && !activeTopic}
-                        user={user}
-                      />
-                    ))}
+                  <div className={styles.listGrid}>
+                    {today.map((a, i) => <ArticleCard key={a.id} article={a} index={i} user={user} />)}
                   </div>
                 </section>
               )}
               {earlier.length > 0 && (
                 <section>
                   <h2 className={styles.sectionLabel}>Earlier</h2>
-                  <div className={styles.grid}>
-                    {earlier.map((article) => (
-                      <ArticleCard key={article.id} article={article} featured={false} user={user} />
-                    ))}
+                  <div className={styles.listGrid}>
+                    {earlier.map((a, i) => <ArticleCard key={a.id} article={a} index={today.length + i} user={user} />)}
                   </div>
                 </section>
               )}
@@ -299,14 +277,14 @@ export default function FeedClient({ initialArticles }: Props) {
         </main>
       )}
 
-      {/* ── Bottom nav: Feed · List · You ── */}
+      {/* ── Connected bottom nav ── */}
       <nav className={styles.bottomNavWrap} aria-label="Main navigation">
         <div className={styles.bottomNav}>
 
           {/* Cards */}
           <button
             className={`${styles.navBtn} ${viewMode === "cards" ? styles.navBtnActive : ""}`}
-            onClick={() => setView("cards")}
+            onClick={() => setViewMode("cards")}
             aria-label="Card feed"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -325,7 +303,7 @@ export default function FeedClient({ initialArticles }: Props) {
           {/* List */}
           <button
             className={`${styles.navBtn} ${viewMode === "list" ? styles.navBtnActive : ""}`}
-            onClick={() => setView("list")}
+            onClick={() => setViewMode("list")}
             aria-label="List feed"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -401,6 +379,14 @@ export default function FeedClient({ initialArticles }: Props) {
                 <span>How we classify</span>
                 <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
               </Link>
+
+              {user?.email === ADMIN_EMAIL && (
+                <Link href="/admin" className={styles.youItem} onClick={() => setShowYou(false)}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 6h8M5 9h5M5 12h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Admin</span>
+                  <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                </Link>
+              )}
 
               {user ? (
                 <button className={`${styles.youItem} ${styles.youSignOutBtn}`} onClick={handleSignOut}>

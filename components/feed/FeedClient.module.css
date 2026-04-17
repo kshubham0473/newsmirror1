@@ -3,22 +3,176 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  background: var(--bg);
+  position: relative;
 }
 
-/* List mode: allow natural page scroll */
-.listMode {
+.listShell {
   height: auto;
   min-height: 100dvh;
   overflow: visible;
 }
 
-/* List mode main content */
+/* ── Top bar ────────────────────────────────────────────── */
+
+.topbar {
+  flex-shrink: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  z-index: 50;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+}
+
+.wordmark span {
+  color: var(--card-blush);
+  opacity: 0.45;
+}
+
+.topbarRight { display: flex; gap: 7px; align-items: center; }
+
+.iconBtn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.iconBtn:hover        { background: rgba(255,255,255,0.12); }
+.iconBtnActive        { background: rgba(255,255,255,0.15) !important; color: #fff !important; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.iconBtnSpin svg { animation: spin 0.9s linear infinite; }
+
+/* ── Source dropdown ───────────────────────────────────── */
+
+.backdrop { position: fixed; inset: 0; z-index: 60; }
+
+.sourceDropdown {
+  position: absolute;
+  top: 50px; right: 18px;
+  z-index: 70;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: dropIn 0.14s ease;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sourceOption {
+  display: block; width: 100%; text-align: left;
+  padding: 9px 12px; font-size: 13px;
+  color: var(--text-secondary);
+  border-radius: var(--r-sm);
+  transition: background 0.1s, color 0.1s;
+}
+
+.sourceOption:hover        { background: var(--surface-2); color: var(--text-primary); }
+.sourceOptionActive        { color: var(--text-primary); font-weight: 500; }
+
+/* ── Topic pill bar ─────────────────────────────────────── */
+
+.topicBar {
+  flex-shrink: 0;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topicBar::-webkit-scrollbar { display: none; }
+
+.topicPill {
+  flex-shrink: 0;
+  font-size: 11px; font-weight: 500;
+  color: rgba(255,255,255,0.38);
+  background: rgba(255,255,255,0.05);
+  border: 0.5px solid rgba(255,255,255,0.07);
+  border-radius: 99px;
+  padding: 4px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+
+.topicPill:hover { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.09); }
+
+.topicPillActive {
+  background: #fff !important;
+  color: #111 !important;
+  border-color: transparent !important;
+  font-weight: 600;
+}
+
+/* ── Progress bar ───────────────────────────────────────── */
+
+.progressBar {
+  height: 2px;
+  background: rgba(255,255,255,0.05);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--card-blush);
+  animation: progress 1.4s ease-in-out infinite;
+}
+
+@keyframes progress {
+  0%   { width: 0;   margin-left: 0; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 0;   margin-left: 100%; }
+}
+
+/* ── Skeleton ───────────────────────────────────────────── */
+
+.skeleton {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px 16px;
+}
+
+.skelCard {
+  width: 100%; max-width: 380px; height: 520px;
+  border-radius: var(--r-xl);
+  background: rgba(255,255,255,0.04);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer { 0%,100% { opacity: 0.4; } 50% { opacity: 0.7; } }
+
+/* ── List view ──────────────────────────────────────────── */
+
 .listMain {
   max-width: var(--max-w);
   width: 100%;
   margin: 0 auto;
-  /* extra bottom padding so content clears the fixed bottom nav */
-  padding: 1rem var(--page-pad) 6rem;
+  padding: 1rem var(--page-pad) 100px;
   display: flex;
   flex-direction: column;
   gap: 2rem;
@@ -26,134 +180,47 @@
 
 .sectionLabel {
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin-bottom: 0.75rem;
+  margin-bottom: 10px;
 }
 
-.grid {
+.listGrid {
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   padding: 4rem 0;
   color: var(--text-tertiary);
   font-size: 14px;
 }
 
-/* ── Refresh progress bar under filters ─────────────────── */
-.progressBar {
-  height: 2px;
-  background: rgba(232, 132, 58, 0.15);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.progressFill {
-  height: 100%;
-  background: var(--accent);
-  animation: feedProgress 1.4s ease-in-out infinite;
-}
-
-:global([data-theme="light"]) .progressBar {
-  background: rgba(196, 97, 26, 0.1);
-}
-
-:global([data-theme="light"]) .progressFill {
-  background: var(--accent);
-}
-
-@keyframes feedProgress {
-  0%   { width: 0;   margin-left: 0; }
-  50%  { width: 60%; margin-left: 20%; }
-  100% { width: 0;   margin-left: 100%; }
-}
-
-/* ── Skeleton stack while checking/loading ──────────────── */
-.skeletonStack {
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-  background: var(--bg);
-}
-
-.skelCard {
-  height: 140px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-:global([data-theme="light"]) .skelCard {
-  background: rgba(0, 0, 0, 0.07);
-}
-
-.skelLines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 2px 0;
-}
-
-.skelLine,
-.skelLineShort {
-  height: 10px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.skelLine      { width: 90%; }
-.skelLineShort { width: 55%; }
-
-:global([data-theme="light"]) .skelLine,
-:global([data-theme="light"]) .skelLineShort {
-  background: rgba(0, 0, 0, 0.07);
-}
-
-@keyframes feedShimmer {
-  0%   { opacity: 0.4; }
-  50%  { opacity: 0.9; }
-  100% { opacity: 0.4; }
-}
-
-.skelCard,
-.skelLine,
-.skelLineShort {
-  animation: feedShimmer 1.4s ease-in-out infinite;
-}
-
-/* ── Bottom nav ─────────────────────────────────────────── */
+/* ── Connected bottom nav ───────────────────────────────── */
 
 .bottomNavWrap {
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding: 10px 16px max(20px, env(safe-area-inset-bottom));
+  padding: 10px 16px 24px;
+  /* In list mode, stick to bottom of viewport */
 }
 
-/* In list mode the shell is not flex-column anymore, so pin the nav */
-.listMode .bottomNavWrap {
+.listShell .bottomNavWrap {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(17,17,17,0.96) 55%, transparent);
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(17,17,17,0.95) 60%, transparent);
   z-index: 100;
 }
 
-:global([data-theme="light"]) .listMode .bottomNavWrap {
-  background: linear-gradient(to top, rgba(255,255,255,0.96) 55%, transparent);
-}
-
-/* The connected pill */
+/* The connected pill — buttons joined by thin paths */
 .bottomNav {
   display: flex;
   align-items: center;
@@ -164,51 +231,23 @@
   gap: 0;
 }
 
-:global([data-theme="light"]) .bottomNav {
-  background: rgba(0,0,0,0.05);
-  border-color: rgba(0,0,0,0.08);
-}
-
 .navBtn {
-  width: 48px;
-  height: 48px;
+  width: 48px; height: 48px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   color: rgba(255,255,255,0.32);
   background: transparent;
   border: none;
   cursor: pointer;
-  flex-shrink: 0;
+  text-decoration: none;
   transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
 }
 
-:global([data-theme="light"]) .navBtn {
-  color: rgba(0,0,0,0.32);
-}
+.navBtn:hover  { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.06); }
+.navBtnActive  { background: #ffffff !important; color: #111111 !important; }
 
-.navBtn:hover {
-  color: rgba(255,255,255,0.65);
-  background: rgba(255,255,255,0.06);
-}
-
-:global([data-theme="light"]) .navBtn:hover {
-  color: rgba(0,0,0,0.65);
-  background: rgba(0,0,0,0.05);
-}
-
-.navBtnActive {
-  background: #ffffff !important;
-  color: #111111 !important;
-}
-
-:global([data-theme="light"]) .navBtnActive {
-  background: #111111 !important;
-  color: #ffffff !important;
-}
-
-/* Curved SVG bridge between buttons */
+/* Connector — thin curved bridge between nav buttons */
 .navConnector {
   width: 20px;
   height: 20px;
@@ -217,14 +256,6 @@
   overflow: visible;
 }
 
-/* ── Backdrop (shared by You sheet) ─────────────────────── */
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  background: rgba(0,0,0,0.45);
-}
 
 /* ── You sheet ──────────────────────────────────────────── */
 
@@ -244,11 +275,6 @@
   animation: slideUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-:global([data-theme="light"]) .youSheet {
-  background: #f5f5f5;
-  border-color: rgba(0,0,0,0.06);
-}
-
 @keyframes slideUp {
   from { transform: translateY(40px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
@@ -262,10 +288,6 @@
   margin: 0 auto 20px;
 }
 
-:global([data-theme="light"]) .youHandle {
-  background: rgba(0,0,0,0.12);
-}
-
 .youAuthRow {
   display: flex;
   align-items: center;
@@ -275,21 +297,17 @@
   margin-bottom: 8px;
 }
 
-:global([data-theme="light"]) .youAuthRow {
-  border-bottom-color: rgba(0,0,0,0.07);
-}
-
 .youAvatar {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(232,132,58,0.15);
+  background: rgba(255,232,229,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
-  color: var(--accent);
+  color: var(--card-blush);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -331,7 +349,7 @@
 
 .youSignInLabel {
   font-size: 14px;
-  color: var(--text-tertiary);
+  color: rgba(255,255,255,0.35);
 }
 
 .youMenu {
@@ -346,7 +364,7 @@
   gap: 12px;
   width: 100%;
   padding: 13px 10px;
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r-md);
   font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
@@ -359,37 +377,23 @@
   transition: background 0.12s;
 }
 
+.youItem svg:first-child {
+  color: rgba(255,255,255,0.4);
+  flex-shrink: 0;
+}
+
 .youItem:hover {
   background: rgba(255,255,255,0.05);
 }
 
-:global([data-theme="light"]) .youItem:hover {
-  background: rgba(0,0,0,0.04);
-}
-
-.youItem svg:first-child {
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
 .youChevron {
   margin-left: auto;
-  color: var(--text-tertiary);
+  color: rgba(255,255,255,0.2);
   flex-shrink: 0;
 }
 
-.youSignOutBtn {
-  color: #e05c4b;
-}
+.youSignOutBtn { color: rgba(255,100,80,0.85); }
+.youSignOutBtn svg:first-child { color: rgba(255,100,80,0.5); }
 
-.youSignOutBtn svg:first-child {
-  color: #e05c4b;
-}
-
-.youSignInBtn {
-  color: var(--accent);
-}
-
-.youSignInBtn svg:first-child {
-  color: var(--accent);
-}
+.youSignInBtn { color: var(--card-blush); }
+.youSignInBtn svg:first-child { color: rgba(255,232,229,0.5); }
