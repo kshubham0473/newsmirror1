@@ -69,7 +69,7 @@ function orderCardStack(articles: Article[]): Article[] {
 
 export default function FeedClient({ initialArticles }: Props) {
   const [user, setUser] = useState<User | null>(null);
-  const { prefs, loaded, save } = usePreferences();
+  const { prefs, loaded, save } = usePreferences(user);
 
   useEffect(() => {
     const supabase = createClient();
