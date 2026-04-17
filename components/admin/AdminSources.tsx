@@ -11,6 +11,7 @@ interface Source {
   language: string;
   created_at: string;
   article_count: number;
+  active: boolean;
 }
 
 interface Props {
@@ -125,6 +126,17 @@ export default function AdminSources({ initialSources }: Props) {
     });
     setEditingId(source.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleToggleActive = async (id: string, currentActive: boolean) => {
+    const supabase = (await import("@/lib/supabase")).createClient();
+    const { error } = await supabase
+      .from("sources")
+      .update({ active: !currentActive })
+      .eq("id", id);
+    if (error) { flash("Failed to update source", "error"); return; }
+    setSources((prev) => prev.map((s) => s.id === id ? { ...s, active: !currentActive } : s));
+    flash(`${currentActive ? "Deactivated" : "Activated"} source`, "success");
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -266,6 +278,18 @@ export default function AdminSources({ initialSources }: Props) {
                 <span className={styles.sourceCount}>
                   {source.article_count} articles
                 </span>
+                <button
+                  className={styles.deleteBtn}
+                  onClick={() => handleToggleActive(source.id, source.active)}
+                  aria-label={source.active ? `Deactivate ${source.name}` : `Activate ${source.name}`}
+                  title={source.active ? "Active — click to deactivate" : "Inactive — click to activate"}
+                  style={{ color: source.active ? "var(--accent)" : "var(--text-tertiary)" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.3"/>
+                    {source.active && <circle cx="7" cy="7" r="2.5" fill="currentColor"/>}
+                  </svg>
+                </button>
                 <button
                   className={styles.deleteBtn}
                   onClick={() => handleEditClick(source)}

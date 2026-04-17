@@ -14,6 +14,7 @@ import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/Refresh
 import styles from "./FeedClient.module.css";
 
 const LAST_SEEN_KEY = "nm_last_seen";
+const ADMIN_EMAIL = "shubhamk0473@gmail.com"; // only this account sees admin link
 
 interface Props {
   initialArticles: Article[];
@@ -21,24 +22,52 @@ interface Props {
 
 type ViewMode = "cards" | "list";
 
-function diversifyByTopic(articles: Article[]): Article[] {
-  const grouped = new Map<string, Article[]>();
-  const untagged: Article[] = [];
-  for (const article of articles) {
-    const tag = article.topic_tags?.[0];
-    if (!tag) { untagged.push(article); continue; }
-    if (!grouped.has(tag)) grouped.set(tag, []);
-    grouped.get(tag)!.push(article);
+function orderCardStack(articles: Article[]): Article[] {
+  // Step 1: Separate clustered (multi-source) stories from singles
+  // Clustered stories get a priority boost — they represent significant coverage
+  const clustered  = articles.filter((a) => (a.cluster_source_count ?? 0) >= 3);
+  const singles    = articles.filter((a) => (a.cluster_source_count ?? 0) < 3);
+
+  // Step 2: Round-robin by topic within each group to enforce topic diversity
+  function roundRobinByTopic(items: Article[]): Article[] {
+    const grouped = new Map<string, Article[]>();
+    const untagged: Article[] = [];
+    for (const a of items) {
+      const tag = a.topic_tags?.[0];
+      if (!tag) { untagged.push(a); continue; }
+      if (!grouped.has(tag)) grouped.set(tag, []);
+      grouped.get(tag)!.push(a);
+    }
+    const buckets = Array.from(grouped.values());
+    const result: Article[] = [];
+    let i = 0;
+    while (buckets.some((b) => b.length > 0)) {
+      const bucket = buckets[i % buckets.length];
+      if (bucket.length > 0) result.push(bucket.shift()!);
+      i++;
+    }
+    return [...result, ...untagged];
   }
-  const buckets = Array.from(grouped.values());
+
+  // Step 3: Interleave — every 3rd card is a clustered story (if available)
+  // so the stack feels: single, single, cluster, single, single, cluster...
+  const orderedClustered = roundRobinByTopic(clustered);
+  const orderedSingles   = roundRobinByTopic(singles);
   const result: Article[] = [];
-  let i = 0;
-  while (buckets.some((b) => b.length > 0)) {
-    const bucket = buckets[i % buckets.length];
-    if (bucket.length > 0) result.push(bucket.shift()!);
-    i++;
+  let ci = 0; // clustered index
+  let si = 0; // singles index
+
+  while (ci < orderedClustered.length || si < orderedSingles.length) {
+    // Push 2 singles then 1 clustered
+    for (let j = 0; j < 2 && si < orderedSingles.length; j++) {
+      result.push(orderedSingles[si++]);
+    }
+    if (ci < orderedClustered.length) {
+      result.push(orderedClustered[ci++]);
+    }
   }
-  return [...result, ...untagged];
+
+  return result;
 }
 
 export default function FeedClient({ initialArticles }: Props) {
@@ -98,7 +127,7 @@ export default function FeedClient({ initialArticles }: Props) {
       if (effectiveSources && !effectiveSources.includes(a.source_id)) return false;
       return true;
     });
-    return activeTopic ? base : diversifyByTopic(base);
+    return activeTopic ? base : orderCardStack(base);
   }, [initialArticles, activeTopic, prefs.topics, effectiveSources]);
 
   const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
@@ -326,6 +355,14 @@ export default function FeedClient({ initialArticles }: Props) {
                 <span>How we classify</span>
                 <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
               </Link>
+
+              {user?.email === ADMIN_EMAIL && (
+                <Link href="/admin" className={styles.youItem} onClick={() => setShowYou(false)}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 6h8M5 9h5M5 12h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Admin</span>
+                  <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                </Link>
+              )}
 
               {user && (
                 <button className={`${styles.youItem} ${styles.youSignOutBtn}`} onClick={() => { /* signOut handled via useAuth */ setShowYou(false); }}>

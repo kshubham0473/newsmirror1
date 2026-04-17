@@ -82,7 +82,7 @@
 /* ── Image zone (40%) ─────────────────────────────────── */
 
 .imageZone {
-  flex: 0 0 40%;
+  flex: 0 0 38%;
   overflow: hidden;
 }
 
@@ -285,12 +285,18 @@
   color: rgba(17, 17, 17, 0.7);
 }
 
+.reactionBtn {
+  transition: background 0.12s, color 0.12s, transform 0.12s;
+}
+
 .reactionUp {
-  background: rgba(0, 0, 0, 0.1) !important;
-  color: #2a7a3b !important;
+  background: rgba(42, 122, 59, 0.18) !important;
+  color: #1e7a30 !important;
+  transform: scale(1.18);
 }
 
 .reactionDown {
-  background: rgba(0, 0, 0, 0.1) !important;
+  background: rgba(196, 48, 26, 0.18) !important;
   color: #c4301a !important;
+  transform: scale(1.18);
 }

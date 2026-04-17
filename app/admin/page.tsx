@@ -9,7 +9,7 @@ export default async function AdminPage() {
 
   const { data: sources } = await supabase
     .from("sources")
-    .select("id, name, rss_url, home_url, language, created_at")
+    .select("id, name, rss_url, home_url, language, active, created_at")
     .order("name");
 
   // Article count per source

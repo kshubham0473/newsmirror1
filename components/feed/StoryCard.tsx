@@ -69,13 +69,11 @@ export default function StoryCard({ article, position, total, user = null }: Pro
       {/* ── Top strip: lean pill left · tag + counter right ── */}
       <div className={styles.strip}>
         <div className={styles.stripLeft}>
-          {lean ? (
+          {lean && (
             <span className={styles.leanPill}>
               <span className={styles.leanDot} aria-hidden />
               {lean}
             </span>
-          ) : (
-            <span className={styles.neutralLabel}>Neutral framing</span>
           )}
         </div>
         <div className={styles.stripRight}>
