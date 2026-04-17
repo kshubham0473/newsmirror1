@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
@@ -89,6 +90,7 @@ export default function FeedClient({ initialArticles }: Props) {
     });
     return () => subscription.unsubscribe();
   }, []);
+
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
@@ -98,6 +100,7 @@ export default function FeedClient({ initialArticles }: Props) {
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showYou, setShowYou] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
 
@@ -140,6 +143,22 @@ export default function FeedClient({ initialArticles }: Props) {
     handleRefresh();
     setTimeout(() => refreshBannerRef.current?.check(), 1000);
   }, [handleRefresh]);
+
+  const handleSignOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setShowYou(false);
+    router.refresh();
+  }, [router]);
+
+  const handleSignIn = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: typeof window !== "undefined" ? window.location.origin : "/" },
+    });
+    setShowYou(false);
+  }, []);
 
   const allSources = useMemo(() => {
     const seen = new Map<string, string>();
@@ -278,6 +297,125 @@ export default function FeedClient({ initialArticles }: Props) {
             </>
           )}
         </main>
+      )}
+
+      {/* ── Bottom nav: Feed · List · You ── */}
+      <nav className={styles.bottomNavWrap} aria-label="Main navigation">
+        <div className={styles.bottomNav}>
+
+          {/* Cards */}
+          <button
+            className={`${styles.navBtn} ${viewMode === "cards" ? styles.navBtnActive : ""}`}
+            onClick={() => setView("cards")}
+            aria-label="Card feed"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+              <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            </svg>
+          </button>
+
+          {/* Curved connector */}
+          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+          </svg>
+
+          {/* List */}
+          <button
+            className={`${styles.navBtn} ${viewMode === "list" ? styles.navBtnActive : ""}`}
+            onClick={() => setView("list")}
+            aria-label="List feed"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
+
+          {/* Curved connector */}
+          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+          </svg>
+
+          {/* You */}
+          <button
+            className={`${styles.navBtn} ${showYou ? styles.navBtnActive : ""}`}
+            onClick={() => setShowYou(true)}
+            aria-label="You"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
+
+        </div>
+      </nav>
+
+      {/* ── You sheet ── */}
+      {showYou && (
+        <>
+          <div className={styles.backdrop} onClick={() => setShowYou(false)} />
+          <div className={styles.youSheet}>
+            <div className={styles.youHandle} />
+
+            {/* Auth row */}
+            <div className={styles.youAuthRow}>
+              {user ? (
+                <>
+                  <div className={styles.youAvatar}>
+                    {user.user_metadata?.avatar_url
+                      ? <img src={user.user_metadata.avatar_url} alt="" referrerPolicy="no-referrer" className={styles.youAvatarImg} />
+                      : <span>{(user.user_metadata?.full_name ?? user.email ?? "?")[0].toUpperCase()}</span>
+                    }
+                  </div>
+                  <div className={styles.youUserInfo}>
+                    <span className={styles.youName}>{user.user_metadata?.full_name ?? "Signed in"}</span>
+                    <span className={styles.youEmail}>{user.email}</span>
+                  </div>
+                </>
+              ) : (
+                <div className={styles.youSignIn}>
+                  <span className={styles.youSignInLabel}>Sign in to sync your preferences</span>
+                </div>
+              )}
+            </div>
+
+            {/* Menu items */}
+            <div className={styles.youMenu}>
+              <button className={styles.youItem} onClick={() => { setShowOnboarding(true); setShowYou(false); }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.3"/></svg>
+                <span>Interests & sources</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </button>
+
+              <Link href="/sources" className={styles.youItem} onClick={() => setShowYou(false)}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 7h8M5 10h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                <span>Source profiles</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </Link>
+
+              <Link href="/methodology" className={styles.youItem} onClick={() => setShowYou(false)}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.3"/><path d="M9 8v5M9 6h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                <span>How we classify</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </Link>
+
+              {user ? (
+                <button className={`${styles.youItem} ${styles.youSignOutBtn}`} onClick={handleSignOut}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M7 2H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h3M11 13l4-4-4-4M15 9H7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Sign out</span>
+                </button>
+              ) : (
+                <button className={`${styles.youItem} ${styles.youSignInBtn}`} onClick={handleSignIn}>
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 2h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3M7 13l4-4-4-4M3 9h9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <span>Sign in with Google</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
