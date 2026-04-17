@@ -23,6 +23,7 @@ function timeAgo(dateStr: string | null): string {
 interface Props {
   article: Article;
   index?: number;
+  featured?: boolean;
   user?: User | null;
 }
 
