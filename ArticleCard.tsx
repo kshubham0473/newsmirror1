@@ -58,7 +58,7 @@ export default function ArticleCard({ article, index = 0, user = null }: Props) 
             <>
               <span className={styles.dot} aria-hidden>·</span>
               <Link
-                href={`/timeline/${article.cluster_id}`}
+                href={`/story/${article.cluster_id}`}
                 className={styles.sourcesPill}
                 style={{ color: accentColor }}
               >
@@ -90,7 +90,7 @@ export default function ArticleCard({ article, index = 0, user = null }: Props) 
             </button>
           )}
           {sourceCount && sourceCount >= 2 && article.cluster_id && (
-            <Link href={`/timeline/${article.cluster_id}`} className={styles.compareBtn}>
+            <Link href={`/story/${article.cluster_id}`} className={styles.compareBtn}>
               Compare sources
             </Link>
           )}

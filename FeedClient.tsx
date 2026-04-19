@@ -11,7 +11,6 @@ import ArticleCard from "./ArticleCard";
 import CardFeed from "./CardFeed";
 import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
-import InstallPrompt from "@/components/pwa/InstallPrompt";
 import styles from "./FeedClient.module.css";
 
 const LAST_SEEN_KEY = "nm_last_seen";
@@ -277,9 +276,6 @@ export default function FeedClient({ initialArticles }: Props) {
           )}
         </main>
       )}
-
-      {/* ── PWA install prompt ── */}
-      <InstallPrompt />
 
       {/* ── Connected bottom nav ── */}
       <nav className={styles.bottomNavWrap} aria-label="Main navigation">
