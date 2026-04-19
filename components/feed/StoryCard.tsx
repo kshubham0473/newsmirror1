@@ -11,6 +11,34 @@ import styles from "./StoryCard.module.css";
 // Cycle through 3 pastel card colours by position
 const CARD_COLORS = ["var(--card-blush)", "var(--card-blue)", "var(--card-cream)"];
 
+// Plain-language explanations for each framing axis
+const LEAN_INFO: Record<string, { title: string; lo: string; hi: string; desc: string }> = {
+  "Identity framing": {
+    title: "Identity framing",
+    lo: "Pluralist",
+    hi: "Majoritarian",
+    desc: "How does this outlet frame stories involving different communities? Pluralist coverage treats all groups equally. Majoritarian coverage centres one community's perspective above others.",
+  },
+  "State narrative": {
+    title: "State narrative",
+    lo: "Sceptical",
+    hi: "Deferential",
+    desc: "Does this outlet question government claims or largely accept them? Sceptical coverage seeks independent verification. Deferential coverage reproduces official positions with little pushback.",
+  },
+  "Economic framing": {
+    title: "Economic framing",
+    lo: "Welfare-focused",
+    hi: "Market-focused",
+    desc: "When covering economic stories, does this outlet centre people's welfare or market performance? Welfare framing highlights inequality and labour. Market framing highlights GDP, growth, and investor sentiment.",
+  },
+  "Institutional tone": {
+    title: "Institutional tone",
+    lo: "Critical",
+    hi: "Deferential",
+    desc: "How does this outlet treat institutions like courts, the RBI, or the Election Commission? Critical coverage questions their decisions. Deferential coverage treats institutional authority as legitimate and final.",
+  },
+};
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -35,10 +63,10 @@ function getLean(article: Article): string | null {
   const { identity_score, state_trust_score, economic_score, institution_score } = article;
 
   const axes = [
-    { label: "Identity framing",    value: identity_score },
-    { label: "State narrative",     value: state_trust_score },
-    { label: "Economic framing",    value: economic_score },
-    { label: "Institutional tone",  value: institution_score },
+    { label: "Identity framing",   value: identity_score },
+    { label: "State narrative",    value: state_trust_score },
+    { label: "Economic framing",   value: economic_score },
+    { label: "Institutional tone", value: institution_score },
   ];
 
   const scored = axes
@@ -51,29 +79,39 @@ function getLean(article: Article): string | null {
 }
 
 export default function StoryCard({ article, position, total, user = null }: Props) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const { trackRead } = useReadingEvents(user);
-  const { reaction, react } = useArticleReaction(user, article.id);
-  const hasImage = !!article.image_url && !imgFailed;
+  const [imgFailed, setImgFailed]     = useState(false);
+  const [leanOpen, setLeanOpen]       = useState(false);
+  const { trackRead }                 = useReadingEvents(user);
+  const { reaction, react }           = useArticleReaction(user, article.id);
+  const hasImage   = !!article.image_url && !imgFailed;
   const sourceName = article.sources?.name ?? "Unknown";
   const sourceInit = sourceName.slice(0, 2).toUpperCase();
-  const age = timeAgo(article.published_at ?? article.ingested_at);
-  const tag = article.topic_tags?.[0];
-  const lean = getLean(article);
+  const age        = timeAgo(article.published_at ?? article.ingested_at);
+  const tag        = article.topic_tags?.[0];
+  const lean       = getLean(article);
+  const leanInfo   = lean ? LEAN_INFO[lean] : null;
   const sourceCount = article.cluster_source_count ?? null;
-  const cardColor = CARD_COLORS[(position - 1) % 3];
+  const cardColor   = CARD_COLORS[(position - 1) % 3];
 
   return (
     <article className={`${styles.card} ${!hasImage ? styles.cardNoImage : ""}`} style={{ background: cardColor }}>
 
-      {/* ── Top strip: lean pill left · tag + counter right ── */}
+      {/* ── Top strip: lean pill left · tag right ── */}
       <div className={styles.strip}>
         <div className={styles.stripLeft}>
           {lean && (
-            <span className={styles.leanPill}>
+            <button
+              className={styles.leanPill}
+              onClick={(e) => { e.stopPropagation(); setLeanOpen(true); }}
+              aria-label={`What is ${lean}?`}
+            >
               <span className={styles.leanDot} aria-hidden />
               {lean}
-            </span>
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden className={styles.leanInfo}>
+                <circle cx="4.5" cy="4.5" r="4" stroke="currentColor" strokeWidth="1.1" opacity="0.5"/>
+                <path d="M4.5 4v2.5M4.5 3h.01" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+              </svg>
+            </button>
           )}
         </div>
         <div className={styles.stripRight}>
@@ -81,7 +119,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
         </div>
       </div>
 
-      {/* ── Image zone: 40% ── */}
+      {/* ── Image zone ── */}
       <div className={styles.imageZone}>
         {hasImage ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -92,12 +130,10 @@ export default function StoryCard({ article, position, total, user = null }: Pro
             loading="lazy"
             onError={() => setImgFailed(true)}
           />
-        ) : (
-          <div className={styles.imagePlaceholder} />
-        )}
+        ) : null}
       </div>
 
-      {/* ── Text zone: 50% ── */}
+      {/* ── Text zone ── */}
       <div className={styles.textZone}>
         {/* Source row */}
         <div className={styles.sourceRow}>
@@ -114,7 +150,7 @@ export default function StoryCard({ article, position, total, user = null }: Pro
           <p className={styles.summary}>{article.summary}</p>
         )}
 
-        {/* Footer: sources pill left · read btn right */}
+        {/* Footer */}
         <div className={styles.footer}>
           {sourceCount && sourceCount >= 2 && article.cluster_id ? (
             <Link
@@ -168,6 +204,40 @@ export default function StoryCard({ article, position, total, user = null }: Pro
           </div>
         </div>
       </div>
+
+      {/* ── Lean tooltip sheet ── */}
+      {leanOpen && leanInfo && (
+        <>
+          <div
+            className={styles.tooltipBackdrop}
+            onClick={(e) => { e.stopPropagation(); setLeanOpen(false); }}
+          />
+          <div className={styles.tooltipSheet} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.tooltipHandle} />
+            <div className={styles.tooltipHeader}>
+              <span className={styles.tooltipDot} aria-hidden />
+              <span className={styles.tooltipTitle}>{leanInfo.title}</span>
+            </div>
+            <div className={styles.tooltipSpectrum}>
+              <span className={styles.spectrumLo}>{leanInfo.lo}</span>
+              <div className={styles.spectrumTrack}>
+                <div className={styles.spectrumLine} />
+                <div className={styles.spectrumArrowLeft}>←</div>
+                <div className={styles.spectrumArrowRight}>→</div>
+              </div>
+              <span className={styles.spectrumHi}>{leanInfo.hi}</span>
+            </div>
+            <p className={styles.tooltipDesc}>{leanInfo.desc}</p>
+            <Link
+              href="/methodology"
+              className={styles.tooltipLink}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Read our full methodology →
+            </Link>
+          </div>
+        </>
+      )}
 
     </article>
   );
