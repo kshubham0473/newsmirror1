@@ -1,10 +1,9 @@
-name: NewsMirror ingest
+name: NewsMirror ingest + summarise
 
 on:
   schedule:
-    # Fetch new articles every 30 minutes
-    - cron: '*/30 * * * *'
-  workflow_dispatch: # allows manual trigger from GitHub UI
+    - cron: '*/30 * * * *'   # every 30 minutes
+  workflow_dispatch:
 
 permissions:
   issues: write
@@ -12,10 +11,8 @@ permissions:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    env:
-      INGEST_SOURCES_PER_RUN: 3
     steps:
-      - name: Fetch new articles
+      - name: Ingest new articles
         id: ingest_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/ingest_response.json -w "%{http_code}" -X POST \
@@ -27,8 +24,46 @@ jobs:
           echo "HTTP status: $HTTP_STATUS"
           cat /tmp/ingest_response.json
           if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
-            echo "::error::Ingest edge function returned HTTP $HTTP_STATUS"
+            echo "::error::Ingest phase returned HTTP $HTTP_STATUS"
             exit 1
+          fi
+
+      # Run summarise immediately after ingest so freshly-ingested articles
+      # get summaries within the same 30-minute window.
+      - name: Summarise pending articles
+        id: summarise_call
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/summarise_response.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=summarise" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/summarise_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Summarise phase returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      # Embed freshly-summarised articles so they're available for clustering.
+      # Runs after summarise so new articles enter the embedding backlog immediately.
+      # A non-2xx here (e.g. Gemini quota exhausted) is flagged but does NOT fail
+      # the workflow — the next run will pick up where this one left off.
+      - name: Embed pending articles
+        id: embed_call
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/embed_response.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=embed" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/embed_response.json
+          # Warn on failure but don't exit — quota errors shouldn't block ingest/summarise
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::warning::Embed phase returned HTTP $HTTP_STATUS — may be a Gemini quota issue"
           fi
 
       - name: Alert on failure
@@ -36,18 +71,18 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = `\u{1F6A8} Ingest workflow failed \u2014 ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`;
+            const title = `🚨 Ingest/summarise workflow failed — ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`;
             const body = [
-              '**Workflow:** NewsMirror ingest',
+              '**Workflow:** NewsMirror ingest + summarise',
               `**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
               '',
-              'The ingest edge function returned a non-2xx response or the curl call failed.',
+              'One of the pipeline phases failed. Check which step failed in the run above.',
               '',
               '**Checklist**',
-              '- [ ] Check Supabase Edge Function logs (`ingest-articles`)',
+              '- [ ] Check Supabase Edge Function logs for `ingest-articles`',
+              '- [ ] Verify Gemini API key is set and quota not exceeded (embed phase is most likely culprit)',
               '- [ ] Verify `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` secrets are set',
-              '- [ ] Check RSS source reachability',
-              '- [ ] See `docs/ops-runbook.md` for full triage steps',
+              '- [ ] Note: embed phase failures emit a warning only and do not fail the workflow',
             ].join('\n');
             await github.rest.issues.create({
               owner: context.repo.owner,
