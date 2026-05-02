@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/ingest?phase=ingest",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/ingest?phase=summarise",
+      "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/ingest?phase=cluster",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/ingest?phase=enrich-images",
+      "schedule": "30 * * * *"
+    }
+  ]
+}
