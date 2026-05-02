@@ -2,7 +2,7 @@ name: NewsMirror ingest + summarise
 
 on:
   schedule:
-    - cron: '*/30 * * * *'   # every 30 minutes
+    - cron: '0 * * * *'   # every hour (reduced from 30 min to save API quota during development)
   workflow_dispatch:
 
 permissions:
