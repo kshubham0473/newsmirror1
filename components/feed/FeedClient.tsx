@@ -250,12 +250,12 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
 
       {/* ── Top Stories horizontal scroll ── */}
       {topClusters.length > 0 && (
-        <div className={styles.topStoriesWrap}>
-          <div className={styles.topStoriesHeader}>
+        <div className={styles.topStoriesWrap} style={{ flexShrink: 0, maxHeight: 210, overflow: "hidden" }}>
+          <div className={styles.topStoriesHeader} style={{ display: "flex", flexDirection: "row", gap: 8, padding: "6px 18px 8px", alignItems: "baseline" }}>
             <span className={styles.topStoriesLabel}>Top Stories</span>
             <span className={styles.topStoriesSub}>Covered by multiple outlets</span>
           </div>
-          <div className={styles.topStoriesScroll}>
+          <div className={styles.topStoriesScroll} style={{ display: "flex", flexDirection: "row", overflowX: "auto", overflowY: "hidden", gap: 10, padding: "0 18px 8px", height: 155 }}>
             {topClusters.map((cluster) => {
               const hasDivergence = (cluster.cluster_divergence_score ?? 0) > 0.3 && cluster.cluster_framing_insight;
               const scoreWidth = Math.round((cluster.cluster_divergence_score ?? 0) * 100);
@@ -265,6 +265,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
                   key={cluster.cluster_id}
                   href={`/timeline/${cluster.cluster_id}`}
                   className={`${styles.topStoryCard} ${hasDivergence ? styles.topStoryCardDivergent : ""}`}
+                  style={{ flexShrink: 0, width: 190, height: 140, display: "flex", flexDirection: "column", gap: 5, textDecoration: "none", overflow: "hidden", borderRadius: 14, padding: "12px 13px 11px", background: hasDivergence ? "rgba(217,119,6,0.05)" : "rgba(255,255,255,0.05)", border: `0.5px solid ${hasDivergence ? "rgba(217,119,6,0.3)" : "rgba(255,255,255,0.08)"}` }}
                 >
                   {tag && <span className={styles.topStoryTag}>{tag}</span>}
                   <p className={styles.topStoryHeadline}>{cluster.headline}</p>
