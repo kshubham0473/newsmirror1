@@ -11,7 +11,6 @@ import ArticleCard from "./ArticleCard";
 import CardFeed from "./CardFeed";
 import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
-import InstallPrompt from "@/components/pwa/InstallPrompt";
 import styles from "./FeedClient.module.css";
 
 const LAST_SEEN_KEY = "nm_last_seen";
@@ -28,20 +27,8 @@ function readSeenIds(): Set<string> {
   }
 }
 
-interface ClusterStory {
-  id: string;
-  cluster_id: string;
-  headline: string;
-  cluster_source_count: number;
-  cluster_framing_insight: string | null;
-  cluster_divergence_score: number | null;
-  cluster_framing_groups: Array<{ outlets: string[]; headline: string; slant?: string }> | null;
-  topic_tags?: string[] | null;
-}
-
 interface Props {
   initialArticles: Article[];
-  topClusters?: ClusterStory[];
 }
 
 type ViewMode = "cards" | "list";
@@ -83,7 +70,7 @@ function orderCardStack(articles: Article[]): Article[] {
   return result;
 }
 
-export default function FeedClient({ initialArticles, topClusters = [] }: Props) {
+export default function FeedClient({ initialArticles }: Props) {
   const { user, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
@@ -248,56 +235,6 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         ))}
       </div>
 
-      {/* ── Top Stories horizontal scroll ── */}
-      {topClusters.length > 0 && (
-        <div className={styles.topStoriesWrap}>
-          <div className={styles.topStoriesHeader}>
-            <span className={styles.topStoriesLabel}>Top Stories</span>
-            <span className={styles.topStoriesSub}>Covered by multiple outlets</span>
-          </div>
-          <div className={styles.topStoriesScroll}>
-            {topClusters.map((cluster) => {
-              const hasDivergence = (cluster.cluster_divergence_score ?? 0) > 0.3 && cluster.cluster_framing_insight;
-              const scoreWidth = Math.round((cluster.cluster_divergence_score ?? 0) * 100);
-              const tag = cluster.topic_tags?.[0];
-              return (
-                <Link
-                  key={cluster.cluster_id}
-                  href={`/timeline/${cluster.cluster_id}`}
-                  className={`${styles.topStoryCard} ${hasDivergence ? styles.topStoryCardDivergent : ""}`}
-                >
-                  {tag && <span className={styles.topStoryTag}>{tag}</span>}
-                  <p className={styles.topStoryHeadline}>{cluster.headline}</p>
-                  <div className={styles.topStoryMeta}>
-                    <span className={styles.topStorySourceCount}>
-                      <span className={styles.topStoryDots}>
-                        {Array.from({ length: Math.min(cluster.cluster_source_count, 4) }).map((_, i) => (
-                          <span key={i} className={styles.topStoryDot} />
-                        ))}
-                      </span>
-                      {cluster.cluster_source_count} sources
-                    </span>
-                    {hasDivergence && (
-                      <span className={styles.topStoryFramingBadge}>
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden>
-                          <path d="M1 4h2.5L4 1l1 6 .5-3H7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Framing gap
-                      </span>
-                    )}
-                  </div>
-                  {hasDivergence && (
-                    <div className={styles.topStoryDivergenceBar}>
-                      <div className={styles.topStoryDivergenceFill} style={{ width: `${scoreWidth}%` }} />
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {busy && (
         <div className={styles.progressBar} aria-hidden>
           <div className={styles.progressFill} />
@@ -339,9 +276,6 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           )}
         </main>
       )}
-
-      {/* ── PWA install prompt ── */}
-      <InstallPrompt />
 
       {/* ── Connected bottom nav ── */}
       <nav className={styles.bottomNavWrap} aria-label="Main navigation">

@@ -2,10 +2,13 @@
 // Deploy: supabase functions deploy ingest-articles
 //
 // Phase routing:
-//   ?phase=ingest    — fetch RSS feeds, deduplicate, insert raw articles
-//   ?phase=summarise — summarise + tag + embed unsummarised articles (Gemini)
-//   ?phase=classify  — classify articles with summaries (Gemini)
-//   ?phase=cluster   — cluster articles by embedding similarity (scheduled every 6h)
+//   ?phase=ingest           — fetch RSS feeds, deduplicate, insert raw articles
+//   ?phase=summarise        — summarise + tag unsummarised articles (Gemini)
+//   ?phase=embed            — generate embeddings for summarised articles missing them
+//   ?phase=classify         — classify articles with summaries (Gemini) [legacy, prefer profile-sources]
+//   ?phase=cluster          — cluster articles by embedding similarity (every 6h)
+//   ?phase=profile-sources  — classify top political articles per source for ideology profiling (daily)
+//   ?phase=analyze-clusters — detect framing divergence across outlets in same cluster (daily)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -18,12 +21,19 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 const EMBED_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-005:embedContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 
 // Cosine similarity threshold for clustering — tune via env var without redeployment
 const CLUSTER_THRESHOLD = parseFloat(Deno.env.get("CLUSTER_THRESHOLD") ?? "0.82");
 
 const SOURCES_PER_RUN = parseInt(Deno.env.get("INGEST_SOURCES_PER_RUN") ?? "4");
+
+// Sources profiled per invocation of ?phase=profile-sources
+// 5 sources × 3 articles × ~3s/classify = ~45s — within the 60s limit
+const PROFILE_SOURCES_PER_RUN = parseInt(Deno.env.get("PROFILE_SOURCES_PER_RUN") ?? "5");
+
+// Only these topic tags are diagnostic of editorial stance — sports/lifestyle are noise
+const POLITICAL_TAGS = ["politics", "judiciary", "foreign-policy", "defence", "economy", "society"];
 
 // ─── RSS PARSING ──────────────────────────────────────────────────────────────
 
@@ -250,7 +260,7 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "models/text-embedding-005",
+      model: "models/gemini-embedding-001",
       content: { parts: [{ text }] },
       taskType: "SEMANTIC_SIMILARITY",
     }),
@@ -368,19 +378,6 @@ async function classifyArticle(headline: string, summary: string, body: string):
   };
 }
 
-// ─── COSINE SIMILARITY ────────────────────────────────────────────────────────
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
 // ─── HANDLER: INGEST ──────────────────────────────────────────────────────────
 
 async function handleIngest(): Promise<Response> {
@@ -469,7 +466,8 @@ async function handleIngest(): Promise<Response> {
 // ─── HANDLER: SUMMARISE (now also embeds) ─────────────────────────────────────
 
 async function handleSummarise(): Promise<Response> {
-  const BATCH_SIZE = 15;
+  // Increased from 15 → 25: execution times show ~30s for 15 articles, well within limits.
+  const BATCH_SIZE = 25;
   const results = { processed: 0, summarised: 0, embedded: 0, errors: 0 };
 
   try {
@@ -477,7 +475,9 @@ async function handleSummarise(): Promise<Response> {
       .from("articles")
       .select("id, headline, body, source_id")
       .or("summary.is.null,summary.eq.")
-      .order("ingested_at", { ascending: true })
+      // Newest first — ensures today's articles appear in the feed immediately
+      // instead of waiting for the entire backlog of older articles to clear.
+      .order("ingested_at", { ascending: false })
       .limit(BATCH_SIZE);
 
     if (error) throw error;
@@ -540,10 +540,81 @@ async function handleSummarise(): Promise<Response> {
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
+// ─── HANDLER: EMBED ───────────────────────────────────────────────────────────
+//
+// Dedicated embedding phase — processes articles that have summaries but no
+// embedding. Kept separate from summarise so quota failures are clearly visible
+// in logs and don't silently block the summarise workflow.
+//
+// Run after every summarise cycle. Processes newest-first so recent articles
+// become available for clustering immediately.
+
+async function handleEmbed(): Promise<Response> {
+  const BATCH_SIZE = 50; // embeddings are fast — no Gemini generation, just one API call each
+  const results = { processed: 0, embedded: 0, skipped: 0, errors: 0, quota_error: false };
+
+  try {
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, headline, summary")
+      .not("summary", "is", null)
+      .neq("summary", "")
+      .neq("summary", "[skipped]")
+      .is("embedding", null)
+      .order("ingested_at", { ascending: false })
+      .limit(BATCH_SIZE);
+
+    if (error) throw error;
+    if (!articles?.length) {
+      return Response.json({ message: "No articles pending embedding", results });
+    }
+
+    for (const article of articles) {
+      results.processed++;
+      try {
+        const text = `${(article as any).headline}. ${(article as any).summary}`.trim();
+        const embedding = await generateEmbedding(text);
+
+        if (!embedding) {
+          // generateEmbedding logs the actual API error; track it here too
+          results.errors++;
+          results.quota_error = true; // assume quota/API issue if embedding returns null
+          continue;
+        }
+
+        const { error: updateErr } = await supabase
+          .from("articles")
+          .update({ embedding })
+          .eq("id", (article as any).id);
+
+        if (updateErr) {
+          console.error("Embed update error:", updateErr);
+          results.errors++;
+        } else {
+          results.embedded++;
+        }
+      } catch (e) {
+        console.error("Embed error for article", (article as any).id, e);
+        results.errors++;
+      }
+    }
+
+    // Surface quota issues clearly in the response so GitHub Actions logs show them
+    if (results.quota_error) {
+      console.error(`[embed] ${results.errors}/${results.processed} articles failed — likely Gemini embedding quota exhausted`);
+    }
+  } catch (err) {
+    console.error("Fatal embed error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
 // ─── HANDLER: CLASSIFY ────────────────────────────────────────────────────────
 
 async function handleClassify(): Promise<Response> {
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 25; // Increased from 10 — classification throughput was too low to populate source profiles
   const now = new Date();
   const summary: any = { requested: BATCH_SIZE, processed: 0, classified: 0, unclassifiable: 0, errors: 0 };
 
@@ -554,7 +625,8 @@ async function handleClassify(): Promise<Response> {
       .is("identity_score", null)
       .not("summary", "is", null)
       .neq("summary", "")
-      .order("ingested_at", { ascending: true })
+      // Newest first — recent articles get source profiles populated quickly
+      .order("ingested_at", { ascending: false })
       .limit(BATCH_SIZE);
 
     if (error) throw error;
@@ -607,90 +679,191 @@ async function handleClassify(): Promise<Response> {
   return Response.json({ summary, timestamp: now.toISOString() });
 }
 
-// ─── HANDLER: CLUSTER ─────────────────────────────────────────────────────────
+// ─── HANDLER: PROFILE SOURCES ────────────────────────────────────────────────
 //
-// Strategy:
-//   1. Pull all articles from the last 72h that have an embedding
-//   2. For each article not yet in a cluster, compare against all others
-//      using cosine similarity
-//   3. Group articles above CLUSTER_THRESHOLD into a cluster
-//   4. Use single-linkage: an article joins a cluster if it's similar to ANY
-//      member already in that cluster
-//   5. Upsert story_clusters (keyed on sorted article UUID set to avoid dupes)
-//   6. Upsert article_clusters rows
+// Targeted classification for building high-quality source ideology profiles.
+// Instead of classifying random articles, picks the most recent unclassified
+// articles with POLITICAL_TAGS from each source — only these are diagnostic of
+// editorial stance. Sports/lifestyle articles classified as unclassifiable just
+// waste Gemini quota without improving source profiles.
 //
-// Runs in ~O(n²) — at 72h volume (~500–800 articles) this is fine in an
-// Edge Function. Revisit if 72h volume exceeds ~2000 articles.
+// Rotates through sources via a daily slot so every source is covered over time.
+// Run once daily. Calls refresh_source_ideology_scores at the end.
 
-async function handleCluster(): Promise<Response> {
-  const results = { articles_loaded: 0, clusters_created: 0, clusters_updated: 0, articles_assigned: 0, errors: 0 };
+async function handleProfileSources(): Promise<Response> {
+  const ARTICLES_PER_SOURCE = 3;
+  const summary = {
+    sources_processed: 0,
+    articles_classified: 0,
+    unclassifiable: 0,
+    errors: 0,
+    profiles_refreshed: false,
+  };
 
   try {
-    // 1. Pull recent articles with embeddings
-    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
-    const { data: articles, error } = await supabase
-      .from("articles")
-      .select("id, headline, source_id, embedding, published_at")
-      .not("embedding", "is", null)
-      .gte("published_at", cutoff)
-      .order("published_at", { ascending: false });
+    const { data: allSources, error: sourcesErr } = await supabase
+      .from("sources")
+      .select("id, name")
+      .eq("active", true)
+      .order("id", { ascending: true });
 
-    if (error) throw error;
-    if (!articles?.length) {
-      return Response.json({ message: "No embedded articles in window", results });
+    if (sourcesErr) throw sourcesErr;
+    if (!allSources?.length) return Response.json({ message: "No active sources", summary });
+
+    // Daily slot rotation — different sources profiled each day
+    const daySlot = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+    const offset = (daySlot * PROFILE_SOURCES_PER_RUN) % allSources.length;
+    const sources = [
+      ...allSources.slice(offset, offset + PROFILE_SOURCES_PER_RUN),
+      ...allSources.slice(0, Math.max(0, offset + PROFILE_SOURCES_PER_RUN - allSources.length)),
+    ].slice(0, PROFILE_SOURCES_PER_RUN);
+
+    for (const source of sources) {
+      summary.sources_processed++;
+      try {
+        // Only fetch articles with political topic tags — these are the ones that
+        // reveal editorial stance. Articles without these tags are skipped entirely.
+        const { data: articles, error: artErr } = await supabase
+          .from("articles")
+          .select("id, headline, summary, body")
+          .eq("source_id", (source as any).id)
+          .is("identity_score", null)
+          .not("summary", "is", null)
+          .neq("summary", "")
+          .overlaps("topic_tags", POLITICAL_TAGS)
+          .order("published_at", { ascending: false })
+          .limit(ARTICLES_PER_SOURCE);
+
+        if (artErr) { console.error(`[profile] Source ${(source as any).name} fetch error:`, artErr); summary.errors++; continue; }
+        if (!articles?.length) {
+          console.log(`[profile] No unclassified political articles for ${(source as any).name}`);
+          continue;
+        }
+
+        for (const article of articles) {
+          try {
+            const output = await classifyArticle(
+              (article as any).headline,
+              (article as any).summary,
+              (article as any).body ?? ""
+            );
+            const { error: updateErr } = await supabase
+              .from("articles")
+              .update({
+                identity_score: output.identity_score,
+                state_trust_score: output.state_trust_score,
+                economic_score: output.economic_score,
+                institution_score: output.institution_score,
+                classifier_rationale: output,
+              })
+              .eq("id", (article as any).id);
+
+            if (updateErr) { console.error("Update error:", updateErr); summary.errors++; }
+            else { output.unclassifiable ? summary.unclassifiable++ : summary.articles_classified++; }
+          } catch (e) {
+            console.error(`[profile] Classify error for article ${(article as any).id}:`, e);
+            summary.errors++;
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      } catch (e) {
+        console.error(`[profile] Source ${(source as any).name} error:`, e);
+        summary.errors++;
+      }
     }
 
-    results.articles_loaded = articles.length;
-    console.log(`Clustering ${articles.length} articles...`);
+    // Refresh source ideology profiles after classifying new articles
+    try {
+      await supabase.rpc("refresh_source_ideology_scores");
+      summary.profiles_refreshed = true;
+    } catch (e) {
+      console.error("[profile] refresh_source_ideology_scores error:", e);
+    }
+  } catch (err) {
+    console.error("Fatal profile-sources error:", err);
+    return Response.json({ error: String(err), summary }, { status: 500 });
+  }
 
-    // 2. Union-find style clustering
-    // Each article starts in its own cluster (keyed by index)
-    const clusterOf: number[] = articles.map((_, i) => i);
+  return Response.json({ summary, timestamp: new Date().toISOString() });
+}
+
+// ─── HANDLER: CLUSTER ─────────────────────────────────────────────────────────
+//
+// Strategy (pgvector-native, no embeddings transferred to Edge Function):
+//   1. Call get_similar_article_pairs() SQL function — Postgres computes all
+//      cosine similarities using SIMD, returns only (id_a, id_b) pairs above threshold
+//   2. Union-find on IDs to group pairs into clusters
+//   3. Fetch canonical headline for each cluster root from DB
+//   4. Upsert story_clusters and article_clusters rows
+//
+// The heavy O(n²) similarity work stays in Postgres. This Edge Function only
+// receives a list of similar pairs, eliminating the 546 resource-limit error.
+
+async function handleCluster(): Promise<Response> {
+  const results = { pairs_found: 0, clusters_created: 0, clusters_updated: 0, articles_assigned: 0, errors: 0 };
+
+  try {
+    // 1. Let Postgres find all similar pairs — no embeddings cross the wire
+    const { data: pairs, error: pairsErr } = await supabase
+      .rpc("get_similar_article_pairs", {
+        p_threshold: CLUSTER_THRESHOLD,
+        p_window_hours: 72,
+      });
+
+    if (pairsErr) throw pairsErr;
+    if (!pairs?.length) {
+      return Response.json({ message: "No similar pairs found above threshold", results });
+    }
+
+    results.pairs_found = pairs.length;
+    console.log(`Found ${pairs.length} similar pairs, running union-find...`);
+
+    // 2. Union-find on article IDs
+    const idToIdx = new Map<string, number>();
+    const allIds: string[] = [];
+
+    for (const pair of pairs) {
+      if (!idToIdx.has(pair.article_a)) { idToIdx.set(pair.article_a, allIds.length); allIds.push(pair.article_a); }
+      if (!idToIdx.has(pair.article_b)) { idToIdx.set(pair.article_b, allIds.length); allIds.push(pair.article_b); }
+    }
+
+    const clusterOf: number[] = allIds.map((_, i) => i);
 
     function find(i: number): number {
       while (clusterOf[i] !== i) {
-        clusterOf[i] = clusterOf[clusterOf[i]]; // path compression
+        clusterOf[i] = clusterOf[clusterOf[i]];
         i = clusterOf[i];
       }
       return i;
     }
 
-    function union(i: number, j: number) {
-      clusterOf[find(i)] = find(j);
+    for (const pair of pairs) {
+      const ia = idToIdx.get(pair.article_a)!;
+      const ib = idToIdx.get(pair.article_b)!;
+      clusterOf[find(ia)] = find(ib);
     }
 
-    // 3. Compare all pairs
-    for (let i = 0; i < articles.length; i++) {
-      for (let j = i + 1; j < articles.length; j++) {
-        const sim = cosineSimilarity(
-          (articles[i] as any).embedding,
-          (articles[j] as any).embedding
-        );
-        if (sim >= CLUSTER_THRESHOLD) {
-          union(i, j);
-        }
-      }
-    }
-
-    // 4. Group by root
-    const groups = new Map<number, typeof articles>();
-    for (let i = 0; i < articles.length; i++) {
+    // 3. Group by root — only keep groups with 2+ articles
+    const groups = new Map<number, string[]>();
+    for (let i = 0; i < allIds.length; i++) {
       const root = find(i);
       if (!groups.has(root)) groups.set(root, []);
-      groups.get(root)!.push(articles[i]);
+      groups.get(root)!.push(allIds[i]);
     }
+    const multiGroups = Array.from(groups.values()).filter((g) => g.length >= 2);
+    console.log(`Union-find produced ${multiGroups.length} clusters`);
 
-    // 5. Only persist clusters with 2+ articles (singletons are not stories)
-    const multiSourceGroups = Array.from(groups.values()).filter((g) => g.length >= 2);
-    console.log(`Found ${multiSourceGroups.length} clusters with 2+ articles`);
+    // 4. Fetch headlines for the root article of each group (for canonical_headline)
+    const rootIds = multiGroups.map((g) => g[0]);
+    const { data: headlines } = await supabase
+      .from("articles")
+      .select("id, headline")
+      .in("id", rootIds);
+    const headlineMap = Object.fromEntries((headlines ?? []).map((a: any) => [a.id, a.headline]));
 
-    for (const group of multiSourceGroups) {
+    // 5. Upsert clusters
+    for (const articleIds of multiGroups) {
       try {
-        // Use the most recent article's headline as the canonical headline
-        const canonical = group[0] as any;
-
-        // Check if any article in the group is already assigned to a cluster
-        const articleIds = group.map((a: any) => a.id);
         const { data: existingAssignments } = await supabase
           .from("article_clusters")
           .select("cluster_id")
@@ -700,14 +873,13 @@ async function handleCluster(): Promise<Response> {
         let clusterId: string;
 
         if (existingAssignments && existingAssignments.length > 0) {
-          // Cluster exists — reuse it
           clusterId = existingAssignments[0].cluster_id;
           results.clusters_updated++;
         } else {
-          // New cluster
+          const canonicalHeadline = headlineMap[articleIds[0]] ?? "Untitled cluster";
           const { data: newCluster, error: clusterErr } = await supabase
             .from("story_clusters")
-            .insert({ canonical_headline: canonical.headline })
+            .insert({ canonical_headline: canonicalHeadline })
             .select("id")
             .single();
 
@@ -721,8 +893,7 @@ async function handleCluster(): Promise<Response> {
           results.clusters_created++;
         }
 
-        // Upsert article_cluster rows (safe to re-run)
-        const rows = articleIds.map((article_id: string) => ({ article_id, cluster_id: clusterId }));
+        const rows = articleIds.map((article_id) => ({ article_id, cluster_id: clusterId }));
         const { error: acErr } = await supabase
           .from("article_clusters")
           .upsert(rows, { onConflict: "article_id,cluster_id" });
@@ -744,6 +915,181 @@ async function handleCluster(): Promise<Response> {
   }
 
   return Response.json({ results, threshold: CLUSTER_THRESHOLD, timestamp: new Date().toISOString() });
+}
+
+// ─── HANDLER: ANALYSE CLUSTERS ───────────────────────────────────────────────
+//
+// For story clusters covered by 3+ distinct outlets, asks Gemini to compare
+// how each outlet framed the event. Detects meaningful divergence — e.g. one
+// outlet calling a bill by its real name while another uses a politically
+// charged substitute — and stores a prose insight + divergence score (0–1).
+//
+// Processes newest unanalysed clusters first (framing_analyzed_at IS NULL).
+// Over-fetches then filters in JS so Postgres doesn't need a complex subquery.
+
+const FRAMING_PROMPT = `You are an editorial analyst examining how different Indian news outlets framed the same event.
+
+Event: {{canonical_headline}}
+
+Headlines and summaries from {{n}} outlets covering this story:
+
+{{articles}}
+
+Determine if there is meaningful FRAMING divergence — not stylistic differences, but cases where outlets name the story differently, emphasise fundamentally different aspects, or make different editorial choices about what the event is "about".
+
+Classic examples of meaningful divergence:
+- One outlet uses the bill's real name; another substitutes a politically charged alternative
+- One outlet leads with the government's stated benefit; another leads with the structural consequence
+- One outlet frames a vote as "rejection by opposition"; another frames it as "bill fails to pass"
+
+Return ONLY valid JSON, no markdown:
+{
+  "has_divergence": true,
+  "insight": "2-3 sentences describing how the framings diverged, what each emphasises, and what it downplays",
+  "divergence_score": 0.75,
+  "framing_groups": [
+    { "outlets": ["Outlet A", "Outlet B"], "headline": "Representative headline for this framing angle", "slant": "One-phrase characterisation of this framing" },
+    { "outlets": ["Outlet C"], "headline": "Representative headline for the contrasting angle", "slant": "One-phrase characterisation" }
+  ]
+}
+
+framing_groups clusters outlets by shared narrative angle (2–3 groups max). Use the exact outlet names provided in the input.
+If all outlets tell essentially the same story, or the topic is non-political, return:
+{ "has_divergence": false, "insight": null, "divergence_score": 0.0, "framing_groups": [] }`;
+
+interface FramingGroup {
+  outlets: string[];
+  headline: string;
+  slant?: string;
+}
+
+async function analyzeClusterFraming(
+  canonicalHeadline: string,
+  articles: { headline: string; summary: string; outletName: string }[]
+): Promise<{ has_divergence: boolean; insight: string | null; divergence_score: number; framing_groups: FramingGroup[] }> {
+  const articleBlock = articles
+    .map((a, i) => `Outlet ${i + 1} (${a.outletName}):\nHeadline: ${a.headline}\nSummary: ${a.summary.slice(0, 220)}`)
+    .join("\n\n");
+
+  const prompt = FRAMING_PROMPT
+    .replace("{{canonical_headline}}", canonicalHeadline)
+    .replace("{{n}}", String(articles.length))
+    .replace("{{articles}}", articleBlock);
+
+  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini framing error: ${await res.text()}`);
+  const data = await res.json();
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+  try {
+    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+    return {
+      has_divergence: parsed.has_divergence === true,
+      insight: parsed.insight ?? null,
+      divergence_score: typeof parsed.divergence_score === "number" ? parsed.divergence_score : 0,
+      framing_groups: Array.isArray(parsed.framing_groups) ? parsed.framing_groups : [],
+    };
+  } catch {
+    console.error("[analyze] Failed to parse framing JSON:", raw);
+    return { has_divergence: false, insight: null, divergence_score: 0, framing_groups: [] };
+  }
+}
+
+async function handleAnalyzeClusters(): Promise<Response> {
+  const MIN_SOURCES = 3;
+  const BATCH_SIZE = 8;
+  const results = {
+    clusters_examined: 0,
+    clusters_analyzed: 0,
+    divergence_found: 0,
+    skipped_too_few_sources: 0,
+    errors: 0,
+  };
+
+  try {
+    // Over-fetch clusters then filter in JS by distinct source count
+    const { data: clusters, error: clustersErr } = await supabase
+      .from("story_clusters")
+      .select(`
+        id, canonical_headline,
+        article_clusters ( articles ( id, headline, summary, source_id, sources ( name ) ) )
+      `)
+      .is("framing_analyzed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(BATCH_SIZE * 3);
+
+    if (clustersErr) throw clustersErr;
+    if (!clusters?.length) return Response.json({ message: "No clusters pending framing analysis", results });
+
+    // Flatten, deduplicate sources, filter to MIN_SOURCES threshold
+    const eligible = (clusters as any[])
+      .map((cluster) => {
+        const articles = (cluster.article_clusters ?? [])
+          .flatMap((ac: any) => ac.articles ?? [])
+          .filter((a: any) => a.summary && a.summary.trim().length > 10);
+        const uniqueSources = new Set(articles.map((a: any) => a.source_id));
+        return { ...cluster, _articles: articles, _sourceCount: uniqueSources.size };
+      })
+      .filter((c) => {
+        if (c._sourceCount >= MIN_SOURCES) return true;
+        results.skipped_too_few_sources++;
+        return false;
+      })
+      .slice(0, BATCH_SIZE);
+
+    if (!eligible.length) {
+      return Response.json({ message: `No clusters with ${MIN_SOURCES}+ sources pending analysis`, results });
+    }
+
+    for (const cluster of eligible) {
+      results.clusters_examined++;
+      try {
+        const articleInputs = cluster._articles.map((a: any) => ({
+          headline: a.headline,
+          summary: a.summary,
+          outletName: a.sources?.name ?? `Source ${a.source_id?.slice(0, 6)}`,
+        }));
+
+        const analysis = await analyzeClusterFraming(cluster.canonical_headline, articleInputs);
+
+        const { error: updateErr } = await supabase
+          .from("story_clusters")
+          .update({
+            framing_insight: analysis.insight,
+            divergence_score: analysis.divergence_score,
+            framing_groups: analysis.framing_groups.length > 0 ? analysis.framing_groups : null,
+            framing_analyzed_at: new Date().toISOString(),
+          })
+          .eq("id", cluster.id);
+
+        if (updateErr) {
+          console.error("[analyze] Cluster update error:", updateErr);
+          results.errors++;
+        } else {
+          results.clusters_analyzed++;
+          if (analysis.has_divergence) {
+            results.divergence_found++;
+            console.log(`[analyze] Divergence detected in cluster "${cluster.canonical_headline}" — score: ${analysis.divergence_score}`);
+          }
+        }
+      } catch (e) {
+        console.error(`[analyze] Cluster ${cluster.id} error:`, e);
+        results.errors++;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  } catch (err) {
+    console.error("Fatal analyze-clusters error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
 // ─── HANDLER: ENRICH IMAGES ───────────────────────────────────────────────────
@@ -870,11 +1216,14 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const phase = url.searchParams.get("phase") ?? "ingest";
 
-  if (phase === "ingest")         return handleIngest();
-  if (phase === "summarise")      return handleSummarise();
-  if (phase === "classify")       return handleClassify();
-  if (phase === "cluster")        return handleCluster();
-  if (phase === "enrich-images")  return handleEnrichImages();
+  if (phase === "ingest")           return handleIngest();
+  if (phase === "summarise")        return handleSummarise();
+  if (phase === "embed")            return handleEmbed();
+  if (phase === "classify")         return handleClassify();
+  if (phase === "cluster")          return handleCluster();
+  if (phase === "profile-sources")  return handleProfileSources();
+  if (phase === "analyze-clusters") return handleAnalyzeClusters();
+  if (phase === "enrich-images")    return handleEnrichImages();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });
