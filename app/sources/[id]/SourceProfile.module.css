@@ -1,0 +1,314 @@
+.page {
+  background: var(--bg);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* ── Nav ───────────────────────────────────────────────── */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 0.5px solid var(--border);
+}
+
+.back {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.back:hover {
+  color: var(--text-primary);
+}
+
+/* ── Hero ──────────────────────────────────────────────── */
+
+.hero {
+  padding: 28px 20px 20px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.heroRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.heroMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.heroName {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+
+.heroSub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.visitLink {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  border: 0.5px solid rgba(232, 132, 58, 0.35);
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.visitLink:hover {
+  background: rgba(232, 132, 58, 0.08);
+}
+
+.disclaimerLine {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.inlineLink {
+  color: rgba(232, 132, 58, 0.6);
+  text-decoration: none;
+}
+
+.inlineLink:hover {
+  color: var(--accent);
+}
+
+/* ── Building state ─────────────────────────────────────── */
+
+.buildingState {
+  padding: 28px 20px;
+}
+
+.buildingTitle {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.buildingDesc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.progressTrack {
+  height: 3px;
+  background: rgba(240, 236, 228, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: rgba(240, 236, 228, 0.18);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ── Section wrapper ─────────────────────────────────────── */
+
+.section {
+  padding: 24px 20px 0;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ── Axis cards ──────────────────────────────────────────── */
+
+.axesGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 380px) {
+  .axesGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.axisCard {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.axisName {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.axisTrackWrap {
+  position: relative;
+  height: 6px;
+  background: rgba(240, 236, 228, 0.07);
+  border-radius: 3px;
+  margin-bottom: 6px;
+  overflow: visible;
+}
+
+.axisMidline {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: rgba(240, 236, 228, 0.2);
+  z-index: 1;
+}
+
+.axisFill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.axisEnds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(240, 236, 228, 0.22);
+  margin-bottom: 10px;
+}
+
+.strengthLabel {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.strengthLabel[data-tier='neutral'] {
+  color: var(--text-tertiary);
+}
+
+.strengthLabel[data-tier='subtle'] {
+  color: rgba(157, 207, 255, 0.85);
+}
+
+.strengthLabel[data-tier='distinct'] {
+  color: var(--accent);
+}
+
+/* ── Story cards ─────────────────────────────────────────── */
+
+.storyList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storyCard {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.storyHeadline {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.storySummary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+
+.rationaleGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.rationaleChip {
+  background: rgba(240, 236, 228, 0.04);
+  border-radius: 6px;
+  padding: 8px 9px;
+}
+
+.rationaleChipLabel {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.rationaleChipText {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* ── Methodology note ───────────────────────────────────── */
+
+.methodologyNote {
+  padding: 24px 20px 0;
+}
+
+.methodologyNote p {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin: 0;
+}

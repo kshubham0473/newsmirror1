@@ -1,0 +1,68 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--accent-dim);
+  border-bottom: 0.5px solid rgba(232, 132, 58, 0.2);
+  gap: 12px;
+  /* slide down on appear */
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.text {
+  font-size: 13px;
+  color: var(--accent);
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loadBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  background: transparent;
+  border: 0.5px solid rgba(232, 132, 58, 0.4);
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.loadBtn:hover {
+  background: var(--accent-dim);
+}
+
+.dismissBtn {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.dismissBtn:hover {
+  color: var(--text-secondary);
+}
+
+/* Spinner — used in TopBar while checking */
+.spinner {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

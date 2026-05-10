@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createServerClient } from "@/lib/supabase-server";
+import { createClient } from "@/lib/supabase";
 import FeedClient from "@/components/feed/FeedClient";
 
 export const revalidate = 60;
@@ -10,9 +10,9 @@ const MAX_PER_SOURCE = 12;
 const FETCH_LIMIT = 200;
 
 export default async function FeedPage() {
-  const supabase = createServerClient();
+  const supabase = createClient();
 
-  // 1. Fetch a wider pool of recent articles (with framing data from story_clusters)
+  // 1. Fetch a wider pool of recent articles
   const { data, error } = await supabase
     .from("articles")
     .select(`
@@ -20,15 +20,7 @@ export default async function FeedPage() {
       published_at, ingested_at, topic_tags,
       identity_score, state_trust_score, economic_score, institution_score,
       sources ( id, name, home_url, language ),
-      article_clusters (
-        cluster_id,
-        story_clusters (
-          id,
-          framing_insight,
-          divergence_score,
-          framing_groups
-        )
-      )
+      article_clusters ( cluster_id, story_clusters ( id ) )
     `)
     .not("summary", "is", null)
     .neq("summary", "")
@@ -62,20 +54,11 @@ export default async function FeedPage() {
     );
   }
 
-  // 4. Flatten cluster info + framing data onto each article
+  // 4. Flatten cluster info onto each article
   const withCluster = raw.map((a: any) => {
-    const firstAc = a.article_clusters?.[0];
-    const clusterId = firstAc?.cluster_id ?? null;
-    const storyCluster = firstAc?.story_clusters?.[0] ?? null;
+    const clusterId = a.article_clusters?.[0]?.cluster_id ?? null;
     const clusterSources = clusterId ? (clusterSourceCounts[clusterId] ?? 1) : 1;
-    return {
-      ...a,
-      cluster_id: clusterId,
-      cluster_source_count: clusterSources,
-      cluster_framing_insight: storyCluster?.framing_insight ?? null,
-      cluster_divergence_score: storyCluster?.divergence_score ?? null,
-      cluster_framing_groups: storyCluster?.framing_groups ?? null,
-    };
+    return { ...a, cluster_id: clusterId, cluster_source_count: clusterSources };
   });
 
   // 5. Source cap — max MAX_PER_SOURCE per source before scoring
@@ -107,26 +90,5 @@ export default async function FeedPage() {
     .slice(0, 120)
     .map(({ _score: _s, ...a }: any) => a);
 
-  // 8. Build Top Stories: unique clusters with 3+ sources, sorted by source count desc
-  //    De-duplicate by cluster_id — one representative article per cluster
-  const seenClusterIds = new Set<string>();
-  const topClusters = withCluster
-    .filter((a: any) => {
-      if (!a.cluster_id) return false;
-      if ((a.cluster_source_count ?? 0) < 2) return false;
-      if (seenClusterIds.has(a.cluster_id)) return false;
-      seenClusterIds.add(a.cluster_id);
-      return true;
-    })
-    .sort((a: any, b: any) => {
-      // Sort by: has framing insight first, then by source count desc
-      const aHasFraming = a.cluster_framing_insight ? 1 : 0;
-      const bHasFraming = b.cluster_framing_insight ? 1 : 0;
-      if (bHasFraming !== aHasFraming) return bHasFraming - aHasFraming;
-      return (b.cluster_source_count ?? 0) - (a.cluster_source_count ?? 0);
-    })
-    .slice(0, 12)
-    .map(({ _score: _s, ...a }: any) => a);
-
-  return <FeedClient initialArticles={articles as any} topClusters={topClusters as any} />;
+  return <FeedClient initialArticles={articles as any} />;
 }

@@ -1,0 +1,339 @@
+.page {
+  background: var(--bg);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* ── Nav ──────────────────────────────────────────────────────── */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 0.5px solid var(--border);
+}
+
+.back {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.back:hover { color: var(--text-primary); }
+
+/* ── Hero ─────────────────────────────────────────────────────── */
+
+.hero {
+  padding: 28px 20px 20px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+.heroMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sourcesCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dot {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.age {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.headline {
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+.subline {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ── Sections ─────────────────────────────────────────────────── */
+
+.section {
+  padding: 24px 20px 0;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+
+.sectionNote {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+/* ── Framing comparison table ─────────────────────────────────── */
+
+.comparisonTable {
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 120px repeat(auto-fill, minmax(110px, 1fr));
+  border-bottom: 0.5px solid var(--border);
+  background: var(--surface);
+}
+
+.tableCorner {
+  padding: 10px 12px;
+  border-right: 0.5px solid var(--border);
+}
+
+.tableSourceCol {
+  padding: 10px 12px;
+  border-right: 0.5px solid var(--border);
+}
+
+.tableSourceCol:last-child { border-right: none; }
+
+.tableSourceName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  transition: color 0.15s;
+}
+
+.tableSourceName:hover { color: var(--accent); }
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 120px repeat(auto-fill, minmax(110px, 1fr));
+  border-bottom: 0.5px solid var(--border);
+}
+
+.tableRow:last-child { border-bottom: none; }
+
+.tableAxisLabel {
+  padding: 12px;
+  border-right: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+}
+
+.axisName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.axisEnds {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.tableCell {
+  padding: 12px;
+  border-right: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.tableCell:last-child { border-right: none; }
+
+/* Mini axis bar inside table cell */
+.miniTrack {
+  position: relative;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.miniMidline {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: var(--border);
+  z-index: 1;
+}
+
+.miniFill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.75;
+  border-radius: 2px;
+}
+
+.leanLabel {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.leanLabel[data-side="lo"] { color: #5b9bd5; }
+.leanLabel[data-side="hi"] { color: var(--accent); }
+.leanLabel[data-side="neutral"] { color: var(--text-tertiary); }
+
+/* ── Source cards ─────────────────────────────────────────────── */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cardSource {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cardSourceName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.cardSourceName:hover { color: var(--accent); }
+
+.cardAge {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.leanPill {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 99px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.cardHeadline {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.cardSummary {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+
+.readBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.readBtn:hover { color: var(--text-primary); }
+
+/* ── Methodology note ─────────────────────────────────────────── */
+
+.methodologyNote {
+  margin: 32px 20px 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+}
+
+.methodologyNote p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.inlineLink {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.inlineLink:hover { color: var(--text-primary); }
+
+/* ── StoryCard compare button (used in StoryCard.tsx) ─────────── */
+/* Append this to StoryCard.module.css as well */
