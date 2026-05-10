@@ -261,15 +261,18 @@ export default function StoryCard({ article, position, total, user = null }: Pro
           {sourceCount && sourceCount >= 2 && article.cluster_id ? (
             <Link
               href={`/timeline/${article.cluster_id}`}
-              className={styles.sourcesPill}
+              className={`${styles.sourcesPill} ${sourceCount >= 5 ? styles.sourcesPillHot : ""}`}
               onClick={(e) => e.stopPropagation()}
+              prefetch
             >
               <span className={styles.sourceDots}>
                 {Array.from({ length: Math.min(sourceCount, 3) }).map((_, i) => (
                   <span key={i} className={styles.sourceDot} />
                 ))}
               </span>
-              <span className={styles.sourcesLabel}>{sourceCount} sources covered this</span>
+              <span className={styles.sourcesLabel}>
+                {sourceCount >= 5 ? `${sourceCount} outlets · See timeline` : `${sourceCount} sources covered this`}
+              </span>
             </Link>
           ) : (
             <span className={styles.singleSource}>Single source</span>

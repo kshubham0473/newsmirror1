@@ -248,50 +248,29 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         ))}
       </div>
 
-      {/* ── Top Stories horizontal scroll ── */}
+      {/* ── Trending bar — compact single-line cluster strip ── */}
       {topClusters.length > 0 && (
-        <div className={styles.topStoriesWrap} style={{ flexShrink: 0, maxHeight: 210, overflow: "hidden" }}>
-          <div className={styles.topStoriesHeader} style={{ display: "flex", flexDirection: "row", gap: 8, padding: "6px 18px 8px", alignItems: "baseline" }}>
-            <span className={styles.topStoriesLabel}>Top Stories</span>
-            <span className={styles.topStoriesSub}>Covered by multiple outlets</span>
-          </div>
-          <div className={styles.topStoriesScroll} style={{ display: "flex", flexDirection: "row", overflowX: "auto", overflowY: "hidden", gap: 10, padding: "0 18px 8px", height: 155 }}>
-            {topClusters.map((cluster) => {
-              const hasDivergence = (cluster.cluster_divergence_score ?? 0) > 0.3 && cluster.cluster_framing_insight;
-              const scoreWidth = Math.round((cluster.cluster_divergence_score ?? 0) * 100);
-              const tag = cluster.topic_tags?.[0];
+        <div className={styles.trendingBar}>
+          <span className={styles.trendingLabel}>Trending</span>
+          <div className={styles.trendingDivider} aria-hidden />
+          <div className={styles.trendingScroll}>
+            {topClusters.map((cluster, i) => {
+              const hasDivergence = (cluster.cluster_divergence_score ?? 0) > 0.3;
               return (
                 <Link
                   key={cluster.cluster_id}
                   href={`/timeline/${cluster.cluster_id}`}
-                  className={`${styles.topStoryCard} ${hasDivergence ? styles.topStoryCardDivergent : ""}`}
-                  style={{ flexShrink: 0, width: 190, height: 140, display: "flex", flexDirection: "column", gap: 5, textDecoration: "none", overflow: "hidden", borderRadius: 14, padding: "12px 13px 11px", background: hasDivergence ? "rgba(217,119,6,0.05)" : "rgba(255,255,255,0.05)", border: `0.5px solid ${hasDivergence ? "rgba(217,119,6,0.3)" : "rgba(255,255,255,0.08)"}` }}
+                  className={styles.trendingItem}
+                  prefetch
                 >
-                  {tag && <span className={styles.topStoryTag}>{tag}</span>}
-                  <p className={styles.topStoryHeadline}>{cluster.headline}</p>
-                  <div className={styles.topStoryMeta}>
-                    <span className={styles.topStorySourceCount}>
-                      <span className={styles.topStoryDots}>
-                        {Array.from({ length: Math.min(cluster.cluster_source_count, 4) }).map((_, i) => (
-                          <span key={i} className={styles.topStoryDot} />
-                        ))}
-                      </span>
-                      {cluster.cluster_source_count} sources
-                    </span>
-                    {hasDivergence && (
-                      <span className={styles.topStoryFramingBadge}>
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden>
-                          <path d="M1 4h2.5L4 1l1 6 .5-3H7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Framing gap
-                      </span>
-                    )}
-                  </div>
+                  {i > 0 && <span className={styles.trendingSep} aria-hidden>·</span>}
                   {hasDivergence && (
-                    <div className={styles.topStoryDivergenceBar}>
-                      <div className={styles.topStoryDivergenceFill} style={{ width: `${scoreWidth}%` }} />
-                    </div>
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden className={styles.trendingWave}>
+                      <path d="M0.5 4h1.5L3 1.5 4.5 6.5 5 4H7.5" stroke="#d97706" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   )}
+                  <span className={styles.trendingHeadline}>{cluster.headline}</span>
+                  <span className={styles.trendingCount}>{cluster.cluster_source_count}</span>
                 </Link>
               );
             })}
