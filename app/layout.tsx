@@ -31,7 +31,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Newsreader:opsz,ital,wght@6..72,0,300..600;6..72,1,300..600&family=Archivo:wght@400..700&display=swap"
           rel="stylesheet"
         />
         <link rel="apple-touch-icon" href="/icon-192.png" />

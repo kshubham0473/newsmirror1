@@ -27,8 +27,17 @@
   --pill-active-bg:    #ffffff;
   --pill-active-text:  #111111;
 
-  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-body:    "Outfit", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body:    "Newsreader", Georgia, serif;
+  --font-ui:      "Archivo", system-ui, sans-serif;
+
+  /* Perspective spectrum — one colour language everywhere */
+  --spec-cool: #0E7C7B;
+  --spec-mid:  #B5A98C;
+  --spec-warm: #C4611A;
+  --spec-cool-soft: #DCEDE9;
+  --spec-warm-soft: #F6E3D2;
+  --ink-deep: #161310;
 
   --page-pad: 1rem;
   --max-w:    680px;

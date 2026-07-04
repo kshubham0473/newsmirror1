@@ -8,7 +8,7 @@ import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import ArticleCard from "./ArticleCard";
-import CardFeed from "./CardFeed";
+import SnapFeed from "./SnapFeed";
 import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
@@ -292,7 +292,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           <div className={styles.skelCard} />
         </div>
       ) : viewMode === "cards" ? (
-        <CardFeed articles={displayArticles} user={user} />
+        <SnapFeed articles={displayArticles} user={user} />
       ) : (
         <main className={styles.listMain}>
           {displayArticles.length === 0 ? (

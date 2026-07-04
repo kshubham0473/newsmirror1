@@ -1,0 +1,186 @@
+/* SnapFeed — vertical story-per-flick feed with spring-settle cards */
+
+.wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* session ink thread */
+.thread {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  z-index: 5;
+  border-radius: 2px;
+}
+.thread i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--spec-cool), var(--spec-warm));
+  transition: width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  border-radius: 2px;
+}
+
+.feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  padding-top: 4px;
+}
+.feed::-webkit-scrollbar { display: none; }
+
+.snap {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  height: 100%;
+  padding: 8px 4px 12px;
+  perspective: 1400px;
+}
+
+/* spring settle: resting cards are slightly shrunken & dim; active springs alive */
+.snap > * {
+  height: 100%;
+  transform: scale(0.93) translateY(16px);
+  opacity: 0.55;
+  filter: saturate(0.7);
+  transition:
+    transform 0.55s cubic-bezier(0.22, 1.2, 0.32, 1),
+    opacity 0.4s ease,
+    filter 0.4s ease;
+}
+.snap:global(.snapActive) > * {
+  transform: none;
+  opacity: 1;
+  filter: none;
+}
+
+/* ── digest card ── */
+.digest {
+  border-radius: 20px;
+  background: var(--card-cream);
+  color: var(--ink-deep);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0 14px;
+  overflow: hidden;
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.7);
+}
+.dHead { padding: 0 20px; flex: none; }
+.dKick {
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(21, 19, 16, 0.5);
+  font-weight: 700;
+}
+.dTitle {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.dTitle em { font-style: italic; font-weight: 400; }
+.dList {
+  flex: 1;
+  margin-top: 12px;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.brief {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 13px 20px;
+  border-top: 1px solid rgba(21, 19, 16, 0.09);
+  text-decoration: none;
+  color: inherit;
+}
+.bDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  position: relative;
+  top: -1px;
+}
+.bDotPing::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  animation: ping 2.4s ease-out infinite;
+}
+@keyframes ping {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  70%, 100% { transform: scale(1.6); opacity: 0; }
+}
+.brief h4 {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
+  flex: 1;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.brief span {
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  color: rgba(21, 19, 16, 0.45);
+  flex: none;
+  white-space: nowrap;
+}
+.dFoot {
+  flex: none;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  color: rgba(21, 19, 16, 0.45);
+  padding-top: 10px;
+}
+
+/* ── end card ── */
+.endCard {
+  border-radius: 20px;
+  border: 1px dashed var(--border-hover, rgba(255, 255, 255, 0.14));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 0 40px;
+  color: var(--text-primary);
+}
+.endFin {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+.endCard p {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.endCard p b { color: var(--text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .snap > * { transform: none; opacity: 1; filter: none; transition: none; }
+  .bDotPing::after { animation: none; }
+}
