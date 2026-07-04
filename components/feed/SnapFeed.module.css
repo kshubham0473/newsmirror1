@@ -43,6 +43,10 @@
   height: 100%;
   padding: 8px 4px 12px;
   perspective: 1400px;
+  /* phone-width column on any screen — the card is a mobile object */
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
 }
 
 /* spring settle: resting cards are slightly shrunken & dim; active springs alive */
