@@ -40,8 +40,10 @@
 .snap {
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  height: 100%;
-  padding: 8px 4px 12px;
+  /* 94% height leaves the next card's top edge peeking below —
+     the visual cue that pulls the reader to flick down */
+  height: 94%;
+  padding: 8px 4px 4px;
   perspective: 1400px;
   /* phone-width column on any screen — the card is a mobile object */
   width: 100%;

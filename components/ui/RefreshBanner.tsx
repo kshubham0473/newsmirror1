@@ -28,18 +28,21 @@ const RefreshBanner = forwardRef<RefreshBannerHandle, RefreshBannerProps>(
 
       try {
         const supabase = createClient();
-        const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
+        let lastSeen = localStorage.getItem(LAST_SEEN_KEY);
 
-        // Build query — reassign so the .gt() chain is not discarded
-        let query = supabase
-          .from('articles')
-          .select('id', { count: 'exact', head: true });
-
-        if (lastSeen) {
-          query = query.gt('ingested_at', lastSeen);
+        // First visit: no baseline — treat "now" as last seen instead of
+        // counting the entire archive as "new" (was showing 24k+ stories).
+        if (!lastSeen) {
+          lastSeen = new Date().toISOString();
+          localStorage.setItem(LAST_SEEN_KEY, lastSeen);
+          setNewCount(null);
+          return;
         }
 
-        const { count } = await query;
+        const { count } = await supabase
+          .from('articles')
+          .select('id', { count: 'exact', head: true })
+          .gt('ingested_at', lastSeen);
 
         if (count && count > 0) {
           setNewCount(count);
