@@ -357,9 +357,9 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
       <nav className={styles.bottomNavWrap} aria-label="Main navigation">
         <div className={styles.bottomNav}>
 
-          {/* Cards */}
+          {/* Cards — nav renders only in list mode, so never active here */}
           <button
-            className={`${styles.navBtn} ${viewMode === "cards" ? styles.navBtnActive : ""}`}
+            className={styles.navBtn}
             onClick={() => setViewMode("cards")}
             aria-label="Card feed"
           >
@@ -378,7 +378,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
 
           {/* List */}
           <button
-            className={`${styles.navBtn} ${viewMode === "list" ? styles.navBtnActive : ""}`}
+            className={`${styles.navBtn} ${styles.navBtnActive}`}
             onClick={() => setViewMode("list")}
             aria-label="List feed"
           >
