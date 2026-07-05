@@ -102,7 +102,7 @@ function orderFeed(
 }
 
 export default function FeedClient({ initialArticles, topClusters = [] }: Props) {
-  const { user, signIn, signOut } = useAuth();
+  const { user, loading: authLoading, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
@@ -122,9 +122,13 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
   const [advanceCount, setAdvanceCount] = useState(0);
   const { nudge } = useNudge(user, initialArticles);
 
+  // Onboarding: only decide once auth AND prefs are fully resolved — deciding
+  // early treats a signed-in user as a fresh guest for a few ms (popup flash),
+  // and the popup must also close itself when real prefs say onboarding is done.
   useEffect(() => {
-    if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
-  }, [loaded, prefs.onboardingDone]);
+    if (authLoading || !loaded) return;
+    setShowOnboarding(!prefs.onboardingDone);
+  }, [authLoading, loaded, prefs.onboardingDone]);
 
   // Read seen card IDs + affinity from localStorage on mount
   useEffect(() => {
