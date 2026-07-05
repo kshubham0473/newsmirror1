@@ -7,6 +7,7 @@ import type { Article } from "@/lib/types";
 import { useReadingEvents } from "@/lib/useReadingEvents";
 import { useArticleReaction } from "@/lib/useArticleReaction";
 import { decodeEntities } from "@/lib/decodeEntities";
+import { recordSignal, SIGNAL } from "@/lib/affinity";
 import styles from "./FlipCard.module.css";
 
 // Pastel front faces cycle by position — same palette as the old stack
@@ -63,6 +64,19 @@ export default function FlipCard({ article, position, user = null }: Props) {
   const { trackRead } = useReadingEvents(user);
   const { reaction, react } = useArticleReaction(user, article.id);
 
+  const doFlip = (next: boolean) => {
+    setFlipped(next);
+    if (next) recordSignal(article.topic_tags, SIGNAL.flip);
+  };
+  const doReact = (value: 1 | -1) => {
+    react(value);
+    recordSignal(article.topic_tags, value === 1 ? SIGNAL.reactUp : SIGNAL.reactDown);
+  };
+  const doOpen = () => {
+    trackRead({ articleId: article.id, sourceId: article.source_id });
+    recordSignal(article.topic_tags, SIGNAL.open);
+  };
+
   const sourceName = article.sources?.name ?? "Unknown";
   const age = timeAgo(article.published_at ?? article.ingested_at);
   const tag = article.topic_tags?.[0];
@@ -99,7 +113,7 @@ export default function FlipCard({ article, position, user = null }: Props) {
             <b>{sourceName}</b><span>·</span><span>{age}</span>
             {!hasImage && tag && <span className={styles.tagChip}>{tag}</span>}
             {hasFlip && (
-              <button className={styles.sidesChip} onClick={() => setFlipped(true)} aria-label="See how other outlets framed this">
+              <button className={styles.sidesChip} onClick={() => doFlip(true)} aria-label="See how other outlets framed this">
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden>
                   <path d="M2 6a4 4 0 0 1 7-2.5M10 6a4 4 0 0 1-7 2.5M9 1v2.5H6.5M3 11V8.5H5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                 </svg>
@@ -129,13 +143,13 @@ export default function FlipCard({ article, position, user = null }: Props) {
             <div className={styles.reacts}>
               <button
                 className={`${styles.reactBtn} ${reaction === 1 ? styles.reactUp : ""}`}
-                onClick={() => react(1)} aria-label="Helpful"
+                onClick={() => doReact(1)} aria-label="Helpful"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 6V3a1 1 0 0 1 1-1l3 4v5H4.5a1 1 0 0 1-1-.8L3 7.5a1 1 0 0 1 1-1.5H5zM9 11V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
               <button
                 className={`${styles.reactBtn} ${reaction === -1 ? styles.reactDown : ""}`}
-                onClick={() => react(-1)} aria-label="Not helpful"
+                onClick={() => doReact(-1)} aria-label="Not helpful"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 8v3a1 1 0 0 1-1 1L5 8V3h4.5a1 1 0 0 1 1 .8L11 6.5a1 1 0 0 1-1 1.5H9zM5 3v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
@@ -143,14 +157,14 @@ export default function FlipCard({ article, position, user = null }: Props) {
           ) : <span />}
           <a
             href={article.url} target="_blank" rel="noopener noreferrer" className={styles.readBtn}
-            onClick={() => trackRead({ articleId: article.id, sourceId: article.source_id })}
+            onClick={doOpen}
           >
             Read full ↗
           </a>
         </div>
 
         {hasFlip && (
-          <button className={styles.peel} onClick={() => setFlipped(true)} aria-label="Flip to the other side">
+          <button className={styles.peel} onClick={() => doFlip(true)} aria-label="Flip to the other side">
             <span className={styles.peelFold} aria-hidden />
             <span className={styles.peelLabel} aria-hidden>2 sides ↻</span>
           </button>
@@ -186,7 +200,7 @@ export default function FlipCard({ article, position, user = null }: Props) {
           </div>
 
           <div className={styles.bFoot}>
-            <button className={styles.unflip} onClick={() => setFlipped(false)}>↺ Back to story</button>
+            <button className={styles.unflip} onClick={() => doFlip(false)}>↺ Back to story</button>
             {article.cluster_id && (
               <Link href={`/timeline/${article.cluster_id}`} className={styles.tlBtn} prefetch>
                 Full timeline →

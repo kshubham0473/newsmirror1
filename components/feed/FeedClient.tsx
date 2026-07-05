@@ -8,6 +8,7 @@ import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import { useNudge } from "@/lib/useNudge";
+import { getAffinity, topTopics } from "@/lib/affinity";
 import ArticleCard from "./ArticleCard";
 import SnapFeed from "./SnapFeed";
 import BlotGlyph from "./BlotGlyph";
@@ -47,40 +48,56 @@ interface Props {
 
 type ViewMode = "cards" | "list";
 
-function orderCardStack(articles: Article[]): Article[] {
-  const clustered = articles.filter((a) => (a.cluster_source_count ?? 0) >= 3);
-  const singles   = articles.filter((a) => (a.cluster_source_count ?? 0) < 3);
+/**
+ * Feed ordering: recency (50%) + multi-outlet cluster boost (25%) + topic
+ * affinity (25%), with an exploration slot every 6th card — the best story
+ * OUTSIDE the reader's top topics, so personalization never seals the bubble.
+ * With an empty affinity map (guests, SSR) this degrades gracefully to
+ * recency + cluster ordering.
+ */
+function orderFeed(
+  articles: Article[],
+  affinity: Record<string, number>,
+  exploreTopics: Set<string>
+): Article[] {
+  const now = Date.now();
+  const maxAff = Math.max(1, ...Object.values(affinity).map((v) => Math.abs(v)));
 
-  function roundRobinByTopic(items: Article[]): Article[] {
-    const grouped = new Map<string, Article[]>();
-    const untagged: Article[] = [];
-    for (const a of items) {
-      const tag = a.topic_tags?.[0];
-      if (!tag) { untagged.push(a); continue; }
-      if (!grouped.has(tag)) grouped.set(tag, []);
-      grouped.get(tag)!.push(a);
-    }
-    const buckets = Array.from(grouped.values());
-    const result: Article[] = [];
-    let i = 0;
-    while (buckets.some((b) => b.length > 0)) {
-      const bucket = buckets[i % buckets.length];
-      if (bucket.length > 0) result.push(bucket.shift()!);
-      i++;
-    }
-    return [...result, ...untagged];
-  }
+  const scored = articles.map((a) => {
+    const ageH = (now - new Date(a.published_at ?? a.ingested_at).getTime()) / 3600000;
+    const recency = Math.max(0, 1 - ageH / 48);
+    const cluster = Math.min(1, ((a.cluster_source_count ?? 1) - 1) / 4);
+    const affRaw = Math.max(0, ...(a.topic_tags ?? []).map((t) => affinity[t] ?? 0));
+    const aff = affRaw / maxAff;
+    return { a, score: 0.5 * recency + 0.25 * cluster + 0.25 * aff };
+  });
+  scored.sort((x, y) => y.score - x.score);
 
-  const orderedClustered = roundRobinByTopic(clustered);
-  const orderedSingles   = roundRobinByTopic(singles);
+  if (exploreTopics.size === 0) return scored.map((s) => s.a);
+
+  // Interleave: every 6th slot goes to the best not-yet-used story whose
+  // topics avoid the reader's top interests.
+  const used = new Set<string>();
   const result: Article[] = [];
-  let ci = 0, si = 0;
+  const isExploration = (a: Article) =>
+    !(a.topic_tags ?? []).some((t) => exploreTopics.has(t));
 
-  while (ci < orderedClustered.length || si < orderedSingles.length) {
-    for (let j = 0; j < 2 && si < orderedSingles.length; j++) result.push(orderedSingles[si++]);
-    if (ci < orderedClustered.length) result.push(orderedClustered[ci++]);
+  let cursor = 0;
+  while (result.length < scored.length) {
+    const wantExplore = (result.length + 1) % 6 === 0;
+    let pick: Article | null = null;
+    if (wantExplore) {
+      const found = scored.find((s) => !used.has(s.a.id) && isExploration(s.a));
+      if (found) pick = found.a;
+    }
+    if (!pick) {
+      while (cursor < scored.length && used.has(scored[cursor].a.id)) cursor++;
+      if (cursor >= scored.length) break;
+      pick = scored[cursor].a;
+    }
+    used.add(pick.id);
+    result.push(pick);
   }
-
   return result;
 }
 
@@ -91,6 +108,9 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
   const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  // Affinity loads post-mount (localStorage) — SSR renders the neutral order
+  const [affinity, setAffinity] = useState<Record<string, number>>({});
+  const [exploreTopics, setExploreTopics] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -106,9 +126,11 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
   }, [loaded, prefs.onboardingDone]);
 
-  // Read seen card IDs from localStorage on mount so fresh stories surface first
+  // Read seen card IDs + affinity from localStorage on mount
   useEffect(() => {
     setSeenIds(readSeenIds());
+    setAffinity(getAffinity());
+    setExploreTopics(new Set(topTopics(3)));
   }, []);
 
   useEffect(() => {
@@ -157,11 +179,14 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
 
     if (activeTopic) return base;
 
-    // Surface unseen stories first; already-swiped sink to the back
+    // Surface unseen stories first; already-seen sink to the back
     const unseen = base.filter((a) => !seenIds.has(a.id));
     const seen   = base.filter((a) =>  seenIds.has(a.id));
-    return [...orderCardStack(unseen), ...orderCardStack(seen)];
-  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, seenIds]);
+    return [
+      ...orderFeed(unseen, affinity, exploreTopics),
+      ...orderFeed(seen, affinity, exploreTopics),
+    ];
+  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, seenIds, affinity, exploreTopics]);
 
   const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });

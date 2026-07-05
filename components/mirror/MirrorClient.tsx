@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
+import { getAffinity } from "@/lib/affinity";
 import styles from "./MirrorClient.module.css";
 
 const AXES = [
@@ -101,6 +102,22 @@ export default function MirrorClient() {
   useEffect(() => {
     document.body.style.overflow = "auto";
     return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  // Topic diet — what the interest algorithm has learned (local, works for guests)
+  const [topicDiet, setTopicDiet] = useState<{ topic: string; pct: number }[]>([]);
+  useEffect(() => {
+    const aff = getAffinity();
+    const positives = Object.entries(aff).filter(([, v]) => v > 0);
+    const total = positives.reduce((s, [, v]) => s + v, 0);
+    if (total > 0) {
+      setTopicDiet(
+        positives
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([topic, v]) => ({ topic, pct: Math.round((v / total) * 100) }))
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -231,13 +248,34 @@ export default function MirrorClient() {
             })}
           </div>
 
-          <div className={styles.secLabel}>Your diet</div>
+          <div className={styles.secLabel}>Your sources</div>
           <div className={styles.diet}>
             {stats.diet.map((d) => (
               <div className={styles.dietRow} key={d.name}>
                 <span className={styles.dietName}>{d.name}</span>
                 <div className={styles.dietTrack}>
                   <div className={styles.dietFill} style={{ width: `${d.pct}%` }} />
+                </div>
+                <span className={styles.dietPct}>{d.pct}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {topicDiet.length > 0 && (
+        <>
+          <div className={styles.secLabel}>What hooks you</div>
+          <p className={styles.dietNote}>
+            The feed learns from your reads, flips, and reactions — this is what it has learned.
+            Every 6th story deliberately comes from outside this list.
+          </p>
+          <div className={styles.diet}>
+            {topicDiet.map((d) => (
+              <div className={styles.dietRow} key={d.topic}>
+                <span className={styles.dietName}>{d.topic}</span>
+                <div className={styles.dietTrack}>
+                  <div className={styles.dietFill} style={{ width: `${d.pct}%`, background: "linear-gradient(90deg, var(--spec-warm), #E8A265)" }} />
                 </div>
                 <span className={styles.dietPct}>{d.pct}%</span>
               </div>

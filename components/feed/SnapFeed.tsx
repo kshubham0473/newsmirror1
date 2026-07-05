@@ -7,7 +7,12 @@ import FlipCard, { type ArticleWithFraming } from "./FlipCard";
 import NudgeCard from "./NudgeCard";
 import type { Nudge } from "@/lib/useNudge";
 import { decodeEntities } from "@/lib/decodeEntities";
+import { recordSignal, SIGNAL } from "@/lib/affinity";
+import { createClient } from "@/lib/supabase";
 import styles from "./SnapFeed.module.css";
+
+// Dwelling this long on a card counts as reading it (summary-first app)
+const DWELL_MS = 8000;
 
 const SEEN_KEY = "nm_seen_cards";
 const SEEN_CAP = 200;
@@ -96,32 +101,68 @@ export default function SnapFeed({ articles, user = null, nudge = null, onAdvanc
     return buildSlots(pool, !!nudge);
   }, [articles, nudge]);
 
-  // Observe which slot is snapped → toggle .snapActive for reveal animations + mark seen
+  // Observe which slot is snapped → reveal animations, seen-marking, dwell tracking
   useEffect(() => {
     const feed = feedRef.current;
     if (!feed) return;
     const sections = Array.from(feed.querySelectorAll(`.${styles.snap}`));
+    const activeSince = new Map<number, number>();
+    const dwellLogged = new Set<string>();
+
+    const logDwell = (idx: number) => {
+      const started = activeSince.get(idx);
+      activeSince.delete(idx);
+      if (!started) return;
+      const ms = Date.now() - started;
+      const slot = slots[idx];
+      if (ms < DWELL_MS || slot?.kind !== "story" || dwellLogged.has(slot.article.id)) return;
+      dwellLogged.add(slot.article.id);
+      // Long dwell = reading the summary — the core act in a summary-first app
+      recordSignal(slot.article.topic_tags, SIGNAL.dwell);
+      if (user) {
+        createClient()
+          .from("reading_events")
+          .insert({
+            user_id: user.id,
+            article_id: slot.article.id,
+            source_id: slot.article.source_id,
+            read_at: new Date().toISOString(),
+            time_spent_seconds: Math.round(ms / 1000),
+          })
+          .then(({ error }) => { if (error) console.warn("dwell event write failed:", error.message); });
+      }
+    };
+
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          e.target.classList.toggle("snapActive", e.intersectionRatio > 0.6);
-          if (e.intersectionRatio > 0.6) {
-            const idx = sections.indexOf(e.target);
-            if (idx >= 0 && !seenIdx.current.has(idx)) {
+          const idx = sections.indexOf(e.target);
+          const nowActive = e.intersectionRatio > 0.6;
+          e.target.classList.toggle("snapActive", nowActive);
+          if (idx < 0) continue;
+          if (nowActive) {
+            if (!activeSince.has(idx)) activeSince.set(idx, Date.now());
+            if (!seenIdx.current.has(idx)) {
               seenIdx.current.add(idx);
               setReadCount(seenIdx.current.size);
               onAdvance?.(seenIdx.current.size);
               const slot = slots[idx];
               if (slot?.kind === "story") markSeen(slot.article.id);
             }
+          } else {
+            logDwell(idx);
           }
         }
       },
       { root: feed, threshold: [0.6] }
     );
     sections.forEach((s) => io.observe(s));
-    return () => io.disconnect();
-  }, [slots, onAdvance]);
+    return () => {
+      // Flush any dwell still in progress when the feed unmounts
+      for (const idx of Array.from(activeSince.keys())) logDwell(idx);
+      io.disconnect();
+    };
+  }, [slots, onAdvance, user]);
 
   const onScroll = () => {
     const feed = feedRef.current;

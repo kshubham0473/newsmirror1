@@ -30,6 +30,12 @@ const GEMINI_URL =
 const EMBED_BATCH_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents";
 
+// Groq — high-throughput free tier (30 RPM / 14,400 RPD on llama-3.1-8b-instant).
+// Primary engine for summarise+tag; Gemini remains primary for classify/framing.
+const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "llama-3.1-8b-instant";
+
 // Cosine similarity threshold for clustering — tune via env var without redeployment
 const CLUSTER_THRESHOLD = parseFloat(Deno.env.get("CLUSTER_THRESHOLD") ?? "0.82");
 
@@ -208,10 +214,46 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
 
 // ─── GEMINI HELPERS ───────────────────────────────────────────────────────────
 
+/** Groq chat call in JSON mode. Throws on API errors (incl. 429). */
+async function groqJson(prompt: string, maxTokens: number): Promise<string> {
+  const res = await fetch(GROQ_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+/** Gemini generateContent call. Throws on API errors (incl. 429). */
+async function geminiJson(prompt: string, maxTokens: number, temperature = 0.1): Promise<string> {
+  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature, maxOutputTokens: maxTokens },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+}
+
 /**
- * One Gemini call producing BOTH the summary and topic tags.
- * Previously summarise + tag were two calls per article — at free-tier
- * rate limits that halved our effective throughput for no benefit.
+ * One LLM call producing BOTH the summary and topic tags.
+ * Groq (fast free tier) is primary when a key is configured; Gemini is the
+ * fallback — and vice versa if Groq is unavailable.
  * Throws on API errors so the caller can detect 429s and back off.
  */
 async function summariseAndTag(
@@ -242,17 +284,19 @@ Headline: ${headline}
 
 Article: ${body.slice(0, 2000)}`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 450 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const data = await res.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+  // Groq primary (fast + generous free tier), Gemini fallback — or the
+  // reverse when no Groq key is configured.
+  let raw = "";
+  if (GROQ_API_KEY) {
+    try {
+      raw = await groqJson(prompt, 450);
+    } catch (groqErr) {
+      console.error("Groq summarise failed, falling back to Gemini:", String(groqErr).slice(0, 160));
+      raw = await geminiJson(prompt, 450);
+    }
+  } else {
+    raw = await geminiJson(prompt, 450);
+  }
   if (!raw) return { summary: "", tags: [] };
 
   try {
@@ -495,9 +539,11 @@ async function handleIngest(): Promise<Response> {
 // the rest of the batch into guaranteed failures.
 
 async function handleSummarise(): Promise<Response> {
-  const BATCH_SIZE = 8;
-  const DELAY_MS = 4000;
-  const results = { processed: 0, summarised: 0, errors: 0, rate_limited: false };
+  // Groq free tier allows 30 RPM — 15 articles at 2s spacing ≈ 45s/run.
+  // Without Groq, drop to Gemini's free-tier pace (8 articles, 4s spacing).
+  const BATCH_SIZE = GROQ_API_KEY ? 15 : 8;
+  const DELAY_MS = GROQ_API_KEY ? 2000 : 4000;
+  const results = { processed: 0, summarised: 0, errors: 0, rate_limited: false, engine: GROQ_API_KEY ? "groq" : "gemini" };
 
   try {
     const { data: articles, error } = await supabase
