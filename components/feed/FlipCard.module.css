@@ -36,7 +36,7 @@
 /* ── front: image ── */
 .fImg {
   position: relative;
-  height: 36%;
+  height: 30%;
   flex: none;
   margin: 12px 12px 0;
   border-radius: 12px;
@@ -128,18 +128,24 @@
 
 .headline {
   font-family: var(--font-display);
-  font-size: 1.42rem;
-  line-height: 1.14;
+  /* capped at 3 lines so long headlines never eat the summary's room */
+  font-size: 1.32rem;
+  line-height: 1.16;
   font-weight: 600;
   letter-spacing: -0.015em;
   margin-top: 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: none;
 }
 .summary {
   margin-top: 9px;
   font-family: var(--font-body);
-  font-size: 0.98rem;
-  line-height: 1.55;
-  color: rgba(21, 19, 16, 0.72);
+  font-size: 1.02rem;
+  line-height: 1.58;
+  color: rgba(21, 19, 16, 0.75);
   font-weight: 400;
   overflow-y: auto;
   min-height: 0;

@@ -206,7 +206,7 @@
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding: 10px 16px 24px;
+  padding: 4px 16px calc(6px + env(safe-area-inset-bottom));
   /* In list mode, stick to bottom of viewport */
 }
 

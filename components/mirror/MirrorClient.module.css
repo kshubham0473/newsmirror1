@@ -1,0 +1,238 @@
+.shell {
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 20px calc(24px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.head { padding-top: 26px; }
+.back {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.title {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 10px;
+  color: var(--text-primary);
+}
+.title em { font-style: italic; font-weight: 400; }
+.sub {
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.rule {
+  margin-top: 16px;
+  border-top: 2px solid var(--text-primary);
+  position: relative;
+}
+.rule::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+}
+
+.blotWrap { display: flex; justify-content: center; padding: 24px 0 4px; }
+.blotNum {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  fill: #f5f2ee;
+}
+.blotLbl {
+  font-family: var(--font-ui);
+  font-size: 7.5px;
+  letter-spacing: 2px;
+  fill: #f5f2ee;
+  opacity: 0.8;
+}
+
+.caption {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  padding: 4px 24px 0;
+  line-height: 1.7;
+}
+.caption b { font-weight: 700; }
+
+.loading {
+  text-align: center;
+  padding: 30px 0;
+  font-family: var(--font-body);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.gate { text-align: center; padding: 18px 12px 0; }
+.gateText {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  max-width: 34ch;
+  margin: 0 auto;
+}
+.gateText b, .gateText em { color: var(--text-primary); }
+.gateBtn {
+  display: inline-block;
+  margin-top: 18px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #111;
+  background: var(--card-cream);
+  padding: 11px 18px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.stats { display: flex; gap: 8px; margin-top: 22px; }
+.stat {
+  flex: 1;
+  padding: 13px 8px;
+  text-align: center;
+  border-radius: 12px;
+  color: #151310;
+}
+.stat:nth-child(1) { background: var(--card-blush); }
+.stat:nth-child(2) { background: var(--card-blue); }
+.stat:nth-child(3) { background: var(--card-cream); }
+.statN {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.statL {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.secLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 0 4px;
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.secLabel::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+.axis { padding: 14px 0 4px; }
+.axisLbl {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 7px;
+}
+.axisLbl b { color: var(--text-primary); }
+.axisBar {
+  position: relative;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--spec-cool), var(--spec-mid) 50%, var(--spec-warm));
+}
+.axisAvg {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 1px;
+  background: rgba(245, 242, 238, 0.4);
+}
+.axisYou {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #f5f2ee;
+  border: 2px solid var(--bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.axisCap {
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+
+.diet { padding-top: 4px; }
+.dietRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dietName {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  width: 128px;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dietTrack {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.dietFill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--spec-cool), #5bbfb4);
+}
+.dietPct {
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  color: var(--text-secondary);
+  width: 34px;
+  text-align: right;
+  flex: none;
+}
+
+.endMark {
+  text-align: center;
+  padding: 30px 0 10px;
+  font-family: var(--font-display);
+  color: var(--text-tertiary);
+  font-size: 1rem;
+}

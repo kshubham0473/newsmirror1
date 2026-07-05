@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
 import { useReadingEvents } from "@/lib/useReadingEvents";
 import { useArticleReaction } from "@/lib/useArticleReaction";
+import { decodeEntities } from "@/lib/decodeEntities";
 import styles from "./FlipCard.module.css";
 
 // Pastel front faces cycle by position — same palette as the old stack
@@ -116,10 +117,10 @@ export default function FlipCard({ article, position, user = null }: Props) {
             )}
           </div>
 
-          <h2 className={`${styles.headline} ${styles.rev}`}>{article.headline}</h2>
+          <h2 className={`${styles.headline} ${styles.rev}`}>{decodeEntities(article.headline)}</h2>
 
           {article.summary && (
-            <p className={`${styles.summary} ${styles.rev}`}>{article.summary}</p>
+            <p className={`${styles.summary} ${styles.rev}`}>{decodeEntities(article.summary)}</p>
           )}
         </div>
 

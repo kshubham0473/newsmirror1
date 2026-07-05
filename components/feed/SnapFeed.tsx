@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
 import FlipCard, { type ArticleWithFraming } from "./FlipCard";
+import { decodeEntities } from "@/lib/decodeEntities";
 import styles from "./SnapFeed.module.css";
 
 const SEEN_KEY = "nm_seen_cards";
@@ -68,9 +69,11 @@ function buildSlots(articles: ArticleWithFraming[]): Slot[] {
 interface Props {
   articles: ArticleWithFraming[];
   user?: User | null;
+  /** Called with the number of screens advanced this session (feeds the blot) */
+  onAdvance?: (count: number) => void;
 }
 
-export default function SnapFeed({ articles, user = null }: Props) {
+export default function SnapFeed({ articles, user = null, onAdvance }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0.04);
   const [readCount, setReadCount] = useState(0);
@@ -92,6 +95,7 @@ export default function SnapFeed({ articles, user = null }: Props) {
             if (idx >= 0 && !seenIdx.current.has(idx)) {
               seenIdx.current.add(idx);
               setReadCount(seenIdx.current.size);
+              onAdvance?.(seenIdx.current.size);
               const slot = slots[idx];
               if (slot?.kind === "story") markSeen(slot.article.id);
             }
@@ -102,7 +106,7 @@ export default function SnapFeed({ articles, user = null }: Props) {
     );
     sections.forEach((s) => io.observe(s));
     return () => io.disconnect();
-  }, [slots]);
+  }, [slots, onAdvance]);
 
   const onScroll = () => {
     const feed = feedRef.current;
@@ -147,7 +151,7 @@ export default function SnapFeed({ articles, user = null }: Props) {
                           className={`${styles.bDot} ${j < 2 ? styles.bDotPing : ""}`}
                           style={{ background: specColor(b), color: specColor(b) }}
                         />
-                        <h4>{b.headline}</h4>
+                        <h4>{decodeEntities(b.headline)}</h4>
                         <span>{b.sources?.name ?? ""} · {timeAgoShort(b.published_at ?? b.ingested_at)}</span>
                       </a>
                     ))}

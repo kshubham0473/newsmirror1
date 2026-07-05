@@ -9,6 +9,7 @@ import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import ArticleCard from "./ArticleCard";
 import SnapFeed from "./SnapFeed";
+import BlotGlyph from "./BlotGlyph";
 import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
@@ -98,6 +99,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
   const [isReloading, setIsReloading] = useState(false);
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
+  const [advanceCount, setAdvanceCount] = useState(0);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
@@ -190,6 +192,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
       <header className={styles.topbar}>
         <div className={styles.wordmark}>News<span>Mirror</span></div>
         <div className={styles.topbarRight}>
+          <BlotGlyph count={advanceCount} />
           <button
             className={`${styles.iconBtn} ${busy ? styles.iconBtnSpin : ""}`}
             onClick={handleRefreshClick}
@@ -248,8 +251,8 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         ))}
       </div>
 
-      {/* ── Trending bar — compact single-line cluster strip ── */}
-      {topClusters.length > 0 && (
+      {/* ── Trending bar — list mode only; cards mode gives the space to stories ── */}
+      {viewMode === "list" && topClusters.length > 0 && (
         <div className={styles.trendingBar}>
           <span className={styles.trendingLabel}>Trending</span>
           <div className={styles.trendingDivider} aria-hidden />
@@ -292,7 +295,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           <div className={styles.skelCard} />
         </div>
       ) : viewMode === "cards" ? (
-        <SnapFeed articles={displayArticles} user={user} />
+        <SnapFeed articles={displayArticles} user={user} onAdvance={setAdvanceCount} />
       ) : (
         <main className={styles.listMain}>
           {displayArticles.length === 0 ? (
@@ -408,6 +411,12 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
 
             {/* Menu items */}
             <div className={styles.youMenu}>
+              <Link href="/mirror" className={styles.youItem} onClick={() => setShowYou(false)}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2C7 3.2 4.8 2.6 3.6 4.8C2.4 7 4.2 8.2 3.6 10.6C3.3 12.4 5.4 14.2 7.2 13C8.4 12.2 8.7 12.7 9 12.7C9.3 12.7 9.6 12.2 10.8 13C12.6 14.2 14.7 12.4 14.4 10.6C13.8 8.2 15.6 7 14.4 4.8C13.2 2.6 11 3.2 9 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                <span>Your mirror</span>
+                <svg className={styles.youChevron} width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+              </Link>
+
               <button className={styles.youItem} onClick={() => { setShowOnboarding(true); setShowYou(false); }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.3"/></svg>
                 <span>Interests & sources</span>
