@@ -76,8 +76,14 @@ async function runPhase(phase, maxCalls = 40) {
     catch (e) { console.error(`  #${i} network error: ${e.message} — retrying in 10s`); await sleep(10000); continue; }
 
     const n = processedCount(r.json);
-    const errs = (r.json?.results ?? r.json?.summary ?? {}).errors ?? 0;
+    const inner = r.json?.results ?? r.json?.summary ?? {};
+    const errs = inner.errors ?? 0;
     console.log(`  #${i} HTTP ${r.status} · processed=${n} · errors=${errs} · ${((Date.now()-t0)/1000).toFixed(1)}s ${r.json ? "· " + JSON.stringify(r.json).slice(0, 160) : ""}`);
+    if (inner.rate_limited) {
+      console.log("  Gemini rate-limited mid-batch — cooling off for 65s");
+      await sleep(65000);
+      continue;
+    }
     if (r.json?.message) { console.log(`  ${r.json.message} — done.`); return; }
 
     if (r.status === 429 || (r.text && r.text.includes("429"))) {
@@ -98,8 +104,8 @@ console.log(`Target: ${FN}`);
 console.log(`Phases: ingest, summarise, embed, cluster${withClassify ? ", classify" : ""}${withFraming ? ", profile-sources, analyze-clusters" : ""}`);
 
 await runPhase("ingest", 8);          // a few extra source slots
-await runPhase("summarise", 60);      // 15/call, also embeds — blocks everything downstream
-await runPhase("embed");              // catches any embed stragglers
+await runPhase("summarise", 80);      // 8/call, rate-limit-aware — blocks everything downstream
+await runPhase("embed", 15);          // batch endpoint: 40 political articles per call
 if (withClassify) await runPhase("classify"); // 10/call — most expensive per article
 await runPhase("cluster", 2);         // full pass, cheap (no Gemini)
 if (withFraming) {
