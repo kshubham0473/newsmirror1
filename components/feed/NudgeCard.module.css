@@ -1,0 +1,124 @@
+/* NudgeCard — dark ink card with breathing terracotta glow */
+
+.card {
+  height: 100%;
+  border-radius: 20px;
+  background: var(--ink-deep, #161310);
+  color: #f2ede4;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 30px 26px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.card::before {
+  content: "";
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(196, 97, 26, 0.32), transparent 65%);
+  top: -120px;
+  right: -120px;
+  animation: breath 5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes breath {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+
+.tag {
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #e8a265;
+  font-weight: 700;
+}
+
+.why {
+  margin-top: 14px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-style: italic;
+  line-height: 1.6;
+  color: rgba(242, 237, 228, 0.8);
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 1.18;
+  font-weight: 600;
+  margin-top: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  color: rgba(242, 237, 228, 0.55);
+}
+.meta b { color: rgba(242, 237, 228, 0.9); font-weight: 600; }
+
+.pull { margin-top: 22px; }
+.pullLabel {
+  font-family: var(--font-ui);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(242, 237, 228, 0.45);
+  margin-bottom: 8px;
+}
+.pullBar {
+  position: relative;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--spec-cool), var(--spec-mid) 50%, var(--spec-warm));
+}
+.poolMark {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 1.5px;
+  background: rgba(242, 237, 228, 0.5);
+}
+.youDot {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #f2ede4;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px rgba(242, 237, 228, 0.5);
+  transition: left 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.cta {
+  align-self: flex-start;
+  margin-top: 20px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink-deep, #161310);
+  background: var(--card-blush);
+  padding: 11px 18px;
+  border-radius: 7px;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card::before { animation: none; }
+}

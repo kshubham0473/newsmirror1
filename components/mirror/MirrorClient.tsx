@@ -84,7 +84,18 @@ function leanWord(lean: number | null): { word: string; color: string } {
 export default function MirrorClient() {
   const { user, signIn } = useAuth();
   const [rows, setRows] = useState<ReadRow[] | null>(null);
+  const [baseline, setBaseline] = useState<Record<string, number | null> | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Pool baseline — what the axis markers compare against (see docs/nudge-design.md)
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("source_pool_baseline")
+      .select("identity_score, state_trust_score, economic_score, institution_score")
+      .single()
+      .then(({ data }) => { if (data) setBaseline(data as any); });
+  }, []);
 
   // The feed locks body scroll; this page needs it back
   useEffect(() => {
@@ -192,16 +203,29 @@ export default function MirrorClient() {
           <div className={styles.axes}>
             {AXES.map((ax) => {
               const v = stats.axes[ax.key];
+              const pool = baseline?.[ax.key];
               return (
                 <div className={styles.axis} key={ax.key}>
                   <div className={styles.axisLbl}>
                     <span>{ax.lo}</span><b>{ax.label}</b><span>{ax.hi}</span>
                   </div>
                   <div className={styles.axisBar}>
-                    <span className={styles.axisAvg} style={{ left: "50%" }} />
+                    {typeof pool === "number" && pool > 0 && (
+                      <span className={styles.axisAvg} style={{ left: `${pool * 100}%` }} title="Average of all NewsMirror sources" />
+                    )}
                     {v !== null && <span className={styles.axisYou} style={{ left: `${v * 100}%` }} />}
                   </div>
-                  {v === null && <p className={styles.axisCap}>Not enough classified reads yet.</p>}
+                  {v === null ? (
+                    <p className={styles.axisCap}>Not enough classified reads yet.</p>
+                  ) : typeof pool === "number" && pool > 0 ? (
+                    <p className={styles.axisCap}>
+                      {Math.abs(v - pool) < 0.05
+                        ? "You read close to the pool average here."
+                        : v < pool
+                          ? `You sit ${ax.lo.toLowerCase()}-of-pool on this axis.`
+                          : `You sit ${ax.hi.toLowerCase()}-of-pool on this axis.`}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}

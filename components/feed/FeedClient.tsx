@@ -7,6 +7,7 @@ import type { Article, TopicId } from "@/lib/types";
 import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
+import { useNudge } from "@/lib/useNudge";
 import ArticleCard from "./ArticleCard";
 import SnapFeed from "./SnapFeed";
 import BlotGlyph from "./BlotGlyph";
@@ -99,6 +100,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [advanceCount, setAdvanceCount] = useState(0);
+  const { nudge } = useNudge(user, initialArticles);
 
   useEffect(() => {
     if (loaded && !prefs.onboardingDone) setShowOnboarding(true);
@@ -321,7 +323,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           <div className={styles.skelCard} />
         </div>
       ) : viewMode === "cards" ? (
-        <SnapFeed articles={displayArticles} user={user} onAdvance={setAdvanceCount} />
+        <SnapFeed articles={displayArticles} user={user} nudge={nudge} onAdvance={setAdvanceCount} />
       ) : (
         <main className={styles.listMain}>
           {displayArticles.length === 0 ? (

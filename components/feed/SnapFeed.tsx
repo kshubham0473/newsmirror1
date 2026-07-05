@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
 import FlipCard, { type ArticleWithFraming } from "./FlipCard";
+import NudgeCard from "./NudgeCard";
+import type { Nudge } from "@/lib/useNudge";
 import { decodeEntities } from "@/lib/decodeEntities";
 import styles from "./SnapFeed.module.css";
 
@@ -40,13 +42,17 @@ function timeAgoShort(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-/** Feed slots: 4 full cards, then 1 digest of 6 briefs, repeating. */
+/** Feed slots: 4 full cards, then 1 digest of 6 briefs, repeating.
+ *  When a nudge is armed, it takes the 6th slot (after the first digest). */
 type Slot =
   | { kind: "story"; article: ArticleWithFraming; position: number }
   | { kind: "digest"; briefs: ArticleWithFraming[]; index: number }
+  | { kind: "nudge" }
   | { kind: "end" };
 
-function buildSlots(articles: ArticleWithFraming[]): Slot[] {
+const NUDGE_SLOT = 5; // zero-based: after 4 stories + 1 digest
+
+function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean): Slot[] {
   const slots: Slot[] = [];
   let i = 0;
   let position = 0;
@@ -62,6 +68,9 @@ function buildSlots(articles: ArticleWithFraming[]): Slot[] {
       slots.push({ kind: "digest", briefs, index: digestIndex++ });
     }
   }
+  if (hasNudge) {
+    slots.splice(Math.min(NUDGE_SLOT, slots.length), 0, { kind: "nudge" });
+  }
   slots.push({ kind: "end" });
   return slots;
 }
@@ -69,17 +78,23 @@ function buildSlots(articles: ArticleWithFraming[]): Slot[] {
 interface Props {
   articles: ArticleWithFraming[];
   user?: User | null;
+  /** Armed nudge from useNudge — rendered as a special card in the flow */
+  nudge?: Nudge | null;
   /** Called with the number of screens advanced this session (feeds the blot) */
   onAdvance?: (count: number) => void;
 }
 
-export default function SnapFeed({ articles, user = null, onAdvance }: Props) {
+export default function SnapFeed({ articles, user = null, nudge = null, onAdvance }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0.04);
   const [readCount, setReadCount] = useState(0);
   const seenIdx = useRef(new Set<number>());
 
-  const slots = useMemo(() => buildSlots(articles), [articles]);
+  // Exclude the nudge's article from regular slots so it doesn't appear twice
+  const slots = useMemo(() => {
+    const pool = nudge ? articles.filter((a) => a.id !== nudge.article.id) : articles;
+    return buildSlots(pool, !!nudge);
+  }, [articles, nudge]);
 
   // Observe which slot is snapped → toggle .snapActive for reveal animations + mark seen
   useEffect(() => {
@@ -130,6 +145,13 @@ export default function SnapFeed({ articles, user = null, onAdvance }: Props) {
               </section>
             );
           }
+          if (slot.kind === "nudge" && nudge) {
+            return (
+              <section className={styles.snap} key="nudge">
+                <NudgeCard nudge={nudge} user={user} />
+              </section>
+            );
+          }
           if (slot.kind === "digest") {
             return (
               <section className={styles.snap} key={`digest-${slot.index}`}>
@@ -161,6 +183,7 @@ export default function SnapFeed({ articles, user = null, onAdvance }: Props) {
               </section>
             );
           }
+          if (slot.kind !== "end") return null;
           return (
             <section className={styles.snap} key="end">
               <div className={styles.endCard}>
