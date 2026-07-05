@@ -487,3 +487,23 @@
   border-radius: 99px;
   padding: 1px 6px;
 }
+
+/* ── Filter sheet: topics + sources (cards mode) ── */
+.sheetTopics {
+  padding: 4px 6px 0;
+}
+.sheetLabel {
+  font-family: var(--font-ui);
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-weight: 700;
+  padding: 8px 12px 6px;
+}
+.sheetPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 4px;
+}

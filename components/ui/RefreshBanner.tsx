@@ -81,7 +81,7 @@ const RefreshBanner = forwardRef<RefreshBannerHandle, RefreshBannerProps>(
     return (
       <div className={styles.banner} role="status">
         <span className={styles.text}>
-          ↑ {newCount} new {newCount === 1 ? 'story' : 'stories'} available
+          {newCount} fresh {newCount === 1 ? 'story' : 'stories'}
         </span>
         <div className={styles.actions}>
           <button className={styles.loadBtn} onClick={handleLoad}>Load</button>

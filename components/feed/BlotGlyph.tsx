@@ -35,7 +35,13 @@ export default function BlotGlyph({ count }: Props) {
       title="Your mirror"
     >
       {dripping && <span className={styles.drip} onAnimationEnd={() => setDripping(false)} />}
-      <svg viewBox="0 0 30 26" width="30" height="26" className={styles.svg} aria-hidden>
+      <svg
+        viewBox="0 0 30 26"
+        width="38"
+        height="33"
+        className={`${styles.svg} ${dripping ? styles.squish : ""}`}
+        aria-hidden
+      >
         <g
           fill="#5BBFB4"
           style={{ transform: `scale(${scale})`, transformOrigin: "15px 13px", transition: "transform .5s cubic-bezier(.2,.7,.2,1)" }}

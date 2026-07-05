@@ -15,7 +15,6 @@ import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/Refresh
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import styles from "./FeedClient.module.css";
 
-const LAST_SEEN_KEY = "nm_last_seen";
 const SEEN_CARDS_KEY = "nm_seen_cards";
 const SEEN_CAP = 200;
 const ADMIN_EMAIL = "shubhamk0473@gmail.com";
@@ -121,12 +120,6 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
     setTimeout(() => setIsReloading(false), 900);
   }, [router]);
 
-  const handleRefreshClick = useCallback(() => {
-    try { localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString()); } catch { /* ignore */ }
-    handleRefresh();
-    setTimeout(() => refreshBannerRef.current?.check(), 1000);
-  }, [handleRefresh]);
-
   const handleSignIn = useCallback(async () => {
     await signIn();
     setShowYou(false);
@@ -194,25 +187,37 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         <div className={styles.topbarRight}>
           <BlotGlyph count={advanceCount} />
           <button
-            className={`${styles.iconBtn} ${busy ? styles.iconBtnSpin : ""}`}
-            onClick={handleRefreshClick}
-            aria-label="Refresh"
-            disabled={busy}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 4A5 5 0 0 1 12 7h-1.5M2 4V1.5M2 4h2.5M12 10A5 5 0 0 1 2 7h1.5M12 10V12.5M12 10h-2.5"
-                stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          <button
             className={`${styles.iconBtn} ${sourceFilterOpen ? styles.iconBtnActive : ""}`}
             onClick={() => setSourceFilterOpen((v) => !v)}
-            aria-label="Filter by source"
+            aria-label="Filter topics and sources"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M1 3.5h12M3.5 7h7M6 10.5h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
           </button>
+          {viewMode === "cards" && (
+            <>
+              <button
+                className={styles.iconBtn}
+                onClick={() => setViewMode("list")}
+                aria-label="Switch to list view"
+              >
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+                  <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <button
+                className={styles.iconBtn}
+                onClick={() => setShowYou(true)}
+                aria-label="You"
+              >
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                  <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -221,6 +226,25 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         <>
           <div className={styles.backdrop} onClick={() => setSourceFilterOpen(false)} />
           <div className={styles.sourceDropdown}>
+            {viewMode === "cards" && (
+              <div className={styles.sheetTopics}>
+                <div className={styles.sheetLabel}>Topics</div>
+                <div className={styles.sheetPills}>
+                  <button
+                    className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
+                    onClick={() => setActiveTopic(null)}
+                  >All</button>
+                  {TOPICS.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`${styles.topicPill} ${activeTopic === t.id ? styles.topicPillActive : ""}`}
+                      onClick={() => setActiveTopic(t.id as TopicId)}
+                    >{t.label}</button>
+                  ))}
+                </div>
+                <div className={styles.sheetLabel}>Sources</div>
+              </div>
+            )}
             <button
               className={`${styles.sourceOption} ${!activeSource ? styles.sourceOptionActive : ""}`}
               onClick={() => { setActiveSource(null); setSourceFilterOpen(false); }}
@@ -236,7 +260,8 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         </>
       )}
 
-      {/* ── Topic pill bar ── */}
+      {/* ── Topic pill bar — list mode only; cards mode filters live in the sheet ── */}
+      {viewMode === "list" && (
       <div className={styles.topicBar}>
         <button
           className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
@@ -250,6 +275,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           >{t.label}</button>
         ))}
       </div>
+      )}
 
       {/* ── Trending bar — list mode only; cards mode gives the space to stories ── */}
       {viewMode === "list" && topClusters.length > 0 && (
@@ -326,7 +352,8 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
       {/* ── PWA install prompt ── */}
       <InstallPrompt />
 
-      {/* ── Connected bottom nav ── */}
+      {/* ── Connected bottom nav — list mode only; cards mode is full-bleed stories ── */}
+      {viewMode === "list" && (
       <nav className={styles.bottomNavWrap} aria-label="Main navigation">
         <div className={styles.bottomNav}>
 
@@ -379,6 +406,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
 
         </div>
       </nav>
+      )}
 
       {/* ── You sheet ── */}
       {showYou && (

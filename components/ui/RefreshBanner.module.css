@@ -1,68 +1,74 @@
+/* Floating ink pill — matches the FlipCard back-face language.
+   Overlays the feed instead of consuming a layout row. */
+
 .banner {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: var(--accent-dim);
-  border-bottom: 0.5px solid rgba(232, 132, 58, 0.2);
-  gap: 12px;
-  /* slide down on appear */
-  animation: slideDown 0.2s ease;
+  gap: 10px;
+  background: var(--ink-deep, #161310);
+  color: #f2ede4;
+  border: 1px solid rgba(242, 237, 228, 0.14);
+  border-radius: 99px;
+  padding: 8px 8px 8px 16px;
+  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.8);
+  animation: inkDrop 0.45s cubic-bezier(0.22, 1.2, 0.32, 1);
+  white-space: nowrap;
 }
 
-@keyframes slideDown {
-  from { transform: translateY(-100%); opacity: 0; }
-  to   { transform: translateY(0);     opacity: 1; }
+@keyframes inkDrop {
+  from { transform: translate(-50%, -14px); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
 }
 
 .text {
-  font-size: 13px;
-  color: var(--accent);
-  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .loadBtn {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--accent);
-  background: transparent;
-  border: 0.5px solid rgba(232, 132, 58, 0.4);
-  border-radius: var(--r-sm);
-  padding: 3px 10px;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink-deep, #161310);
+  background: #f2ede4;
+  border: none;
+  border-radius: 99px;
+  padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: transform 0.15s;
 }
-
-.loadBtn:hover {
-  background: var(--accent-dim);
-}
+.loadBtn:active { transform: scale(0.95); }
 
 .dismissBtn {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: rgba(242, 237, 228, 0.5);
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 8px;
   line-height: 1;
   transition: color 0.15s;
 }
+.dismissBtn:hover { color: rgba(242, 237, 228, 0.9); }
 
-.dismissBtn:hover {
-  color: var(--text-secondary);
-}
-
-/* Spinner — used in TopBar while checking */
+/* Spinner — used while checking */
 .spinner {
   animation: spin 0.9s linear infinite;
 }
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
