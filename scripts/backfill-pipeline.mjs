@@ -122,5 +122,10 @@ if (want("classify") && (only || withClassify)) await runPhase("classify");
 if (want("cluster"))         await runPhase("cluster", 2);
 if (want("profile-sources") && (only || withFraming)) await runPhase("profile-sources", 6);
 if (want("analyze-clusters") && (only || withFraming)) await runPhase("analyze-clusters", 15);
+// Threads (Phase 2). Opt-in only — run explicitly with --only.
+//   node scripts/backfill-pipeline.mjs --only=backfill-entities   (one-time bootstrap)
+//   node scripts/backfill-pipeline.mjs --only=detect-threads      (free, no LLM)
+if (only && want("backfill-entities")) await runPhase("backfill-entities", 80);
+if (only && want("detect-threads"))    await runPhase("detect-threads", 1);
 
 console.log("\nDone. Check counts with the SQL in docs/ops-runbook.md → Database health checks.");

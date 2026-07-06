@@ -608,7 +608,7 @@ async function handleSummarise(): Promise<Response> {
         } else {
           const { error: updateErr } = await supabase
             .from("articles")
-            .update({ summary, topic_tags: tags, key_entities: entities })
+            .update({ summary, topic_tags: tags, key_entities: entities, entities_extracted_at: new Date().toISOString() })
             .eq("id", (article as any).id);
 
           if (updateErr) {
@@ -1304,6 +1304,223 @@ async function handleEnrichImages(): Promise<Response> {
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
+// ─── HANDLER: BACKFILL ENTITIES ───────────────────────────────────────────────
+//
+// One-time bootstrap so Thread detection has data before the crons slowly build
+// it. Extracts entities from the EXISTING summary (short prompt, cheap) for
+// political articles that were summarised before entity extraction shipped.
+// Rate-limit-aware, same pacing as summarise. Safe to re-run.
+
+async function extractEntitiesOnly(headline: string, summary: string): Promise<string[]> {
+  const prompt = `From this Indian news headline and summary, list 2–6 canonical entities the story is ABOUT — the specific people, organisations, places, policies, schemes, or events (not passing mentions). Use consistent canonical forms (e.g. "BJP" not "Bharatiya Janata Party", "E20 ethanol" not "20% ethanol blend"). Keep proper capitalisation.
+
+Return ONLY valid JSON: {"entities": ["E20 ethanol", "Nitin Gadkari"]}
+
+Headline: ${headline}
+Summary: ${summary}`;
+
+  let raw = "";
+  if (GROQ_API_KEY) raw = await groqJson(prompt, 120);
+  else raw = await geminiJson(prompt, 120);
+  try {
+    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+    return Array.isArray(parsed.entities)
+      ? parsed.entities
+          .filter((e: unknown) => typeof e === "string" && e.trim().length > 1 && e.trim().length < 60)
+          .map((e: string) => e.trim())
+          .slice(0, 6)
+      : [];
+  } catch { return []; }
+}
+
+async function handleBackfillEntities(): Promise<Response> {
+  const BATCH_SIZE = 15;
+  const DELAY_MS = 2200;
+  const results = { processed: 0, updated: 0, errors: 0, rate_limited: false };
+
+  try {
+    const sinceIso = new Date(Date.now() - 10 * 864e5).toISOString();
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, headline, summary")
+      .overlaps("topic_tags", POLITICAL_TAGS)
+      .not("summary", "is", null)
+      .neq("summary", "")
+      // Attempted-flag, not entity-presence — so empty-entity articles aren't
+      // re-picked forever (the classifier-loop trap).
+      .is("entities_extracted_at", null)
+      .gte("ingested_at", sinceIso)
+      .order("ingested_at", { ascending: false })
+      .limit(BATCH_SIZE);
+
+    if (error) throw error;
+    if (!articles?.length) {
+      return Response.json({ message: "No political articles pending entity backfill", results });
+    }
+
+    for (const a of articles as any[]) {
+      results.processed++;
+      try {
+        const entities = await extractEntitiesOnly(a.headline, a.summary);
+        const { error: uErr } = await supabase
+          .from("articles")
+          .update({ key_entities: entities, entities_extracted_at: new Date().toISOString() })
+          .eq("id", a.id);
+        if (uErr) { console.error("entity backfill update error:", uErr); results.errors++; }
+        else results.updated++;
+      } catch (e) {
+        const m = String(e);
+        console.error("entity backfill error:", m);
+        results.errors++;
+        if (m.includes("429") || m.toLowerCase().includes("rate")) { results.rate_limited = true; break; }
+      }
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+  } catch (err) {
+    console.error("Fatal backfill-entities error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
+// ─── HANDLER: DETECT THREADS ──────────────────────────────────────────────────
+//
+// Phase 2 of Threads. NO LLM — pure entity heuristic, so it costs nothing to run.
+//
+// An "issue" is an entity that keeps generating coverage: it appears in political
+// articles across ≥ MIN_DAYS distinct days with ≥ MIN_ARTICLES articles in a
+// rolling window. Each qualifying entity anchors a Thread; its articles attach.
+//
+// Fragmentation guard: entities are processed most-articles-first, and once an
+// article is claimed by a Thread it can't seed another — so "E20 ethanol",
+// "sugar mills", and "Nitin Gadkari" (which co-occur in the same articles)
+// collapse into ONE thread instead of three. Co-occurring entities are recorded
+// as the thread's related key_entities.
+
+const THREAD_WINDOW_DAYS  = parseInt(Deno.env.get("THREAD_WINDOW_DAYS")  ?? "14");
+const THREAD_MIN_DAYS     = parseInt(Deno.env.get("THREAD_MIN_DAYS")     ?? "3");
+const THREAD_MIN_ARTICLES = parseInt(Deno.env.get("THREAD_MIN_ARTICLES") ?? "5");
+
+async function handleDetectThreads(): Promise<Response> {
+  const results = { candidates: 0, threads_upserted: 0, articles_linked: 0, errors: 0 };
+
+  try {
+    const sinceIso = new Date(Date.now() - THREAD_WINDOW_DAYS * 864e5).toISOString();
+
+    // Pull recent political articles that have entities. Page through in case
+    // there are many — but political + windowed keeps this small.
+    const { data: articles, error } = await supabase
+      .from("articles")
+      .select("id, source_id, published_at, ingested_at, key_entities")
+      .overlaps("topic_tags", POLITICAL_TAGS)
+      .not("key_entities", "is", null)
+      .gte("ingested_at", sinceIso)
+      .order("ingested_at", { ascending: false })
+      .limit(2000);
+
+    if (error) throw error;
+    if (!articles?.length) {
+      return Response.json({ message: "No recent political articles with entities", results });
+    }
+
+    // entity -> { articleIds:Set, days:Set, sources:Set }
+    const idx = new Map<string, { arts: Set<string>; days: Set<string>; srcs: Set<string> }>();
+    const artEntities = new Map<string, string[]>();
+    const artDate = new Map<string, string>();
+
+    for (const a of articles as any[]) {
+      const ents: string[] = Array.isArray(a.key_entities) ? a.key_entities : [];
+      if (!ents.length) continue;
+      const day = (a.published_at ?? a.ingested_at ?? "").slice(0, 10);
+      artEntities.set(a.id, ents);
+      artDate.set(a.id, a.published_at ?? a.ingested_at);
+      for (const e of ents) {
+        if (!idx.has(e)) idx.set(e, { arts: new Set(), days: new Set(), srcs: new Set() });
+        const r = idx.get(e)!;
+        r.arts.add(a.id);
+        if (day) r.days.add(day);
+        if (a.source_id) r.srcs.add(a.source_id);
+      }
+    }
+
+    // Qualifying entities, ranked by article volume (greedy anchor order)
+    const qualifying = [...idx.entries()]
+      .filter(([, r]) => r.days.size >= THREAD_MIN_DAYS && r.arts.size >= THREAD_MIN_ARTICLES)
+      .sort((a, b) => b[1].arts.size - a[1].arts.size);
+
+    results.candidates = qualifying.length;
+
+    const claimed = new Set<string>();
+
+    for (const [anchor, r] of qualifying) {
+      // Only this anchor's still-unclaimed articles seed the thread
+      const own = [...r.arts].filter((id) => !claimed.has(id));
+      if (own.length < THREAD_MIN_ARTICLES) continue; // absorbed by a bigger thread
+
+      // Related entities = those co-occurring in ≥30% of this thread's articles
+      const coCount = new Map<string, number>();
+      for (const id of own) {
+        for (const e of artEntities.get(id) ?? []) {
+          if (e === anchor) continue;
+          coCount.set(e, (coCount.get(e) ?? 0) + 1);
+        }
+      }
+      const related = [...coCount.entries()]
+        .filter(([, c]) => c >= own.length * 0.3)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([e]) => e);
+
+      const dates = own.map((id) => artDate.get(id)).filter(Boolean).sort();
+      const srcSet = new Set<string>();
+      for (const id of own) {
+        const sid = (articles as any[]).find((x) => x.id === id)?.source_id;
+        if (sid) srcSet.add(sid);
+      }
+
+      try {
+        // Upsert thread keyed by anchor_entity (stable across runs)
+        const { data: thread, error: tErr } = await supabase
+          .from("threads")
+          .upsert({
+            anchor_entity: anchor,
+            title: anchor,
+            key_entities: [anchor, ...related],
+            article_count: own.length,
+            source_count: srcSet.size,
+            first_seen: dates[0] ?? null,
+            last_article_at: dates[dates.length - 1] ?? null,
+            status: "developing",
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "anchor_entity" })
+          .select("id")
+          .single();
+
+        if (tErr || !thread) { console.error("[threads] upsert error:", tErr); results.errors++; continue; }
+        results.threads_upserted++;
+
+        const rows = own.map((article_id) => ({ thread_id: thread.id, article_id }));
+        const { error: linkErr } = await supabase
+          .from("thread_articles")
+          .upsert(rows, { onConflict: "thread_id,article_id" });
+        if (linkErr) { console.error("[threads] link error:", linkErr); results.errors++; }
+        else results.articles_linked += rows.length;
+
+        own.forEach((id) => claimed.add(id));
+      } catch (e) {
+        console.error(`[threads] anchor "${anchor}" error:`, e);
+        results.errors++;
+      }
+    }
+  } catch (err) {
+    console.error("Fatal detect-threads error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -1318,6 +1535,7 @@ Deno.serve(async (req) => {
   if (phase === "profile-sources")  return handleProfileSources();
   if (phase === "analyze-clusters") return handleAnalyzeClusters();
   if (phase === "enrich-images")    return handleEnrichImages();
+  if (phase === "detect-threads")   return handleDetectThreads();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });
