@@ -103,17 +103,24 @@ async function runPhase(phase, maxCalls = 40) {
   console.log(`  reached ${maxCalls}-call cap for ${phase} (re-run to continue).`);
 }
 
-console.log(`Target: ${FN}`);
-console.log(`Phases: ingest, summarise, embed, cluster${withClassify ? ", classify" : ""}${withFraming ? ", profile-sources, analyze-clusters" : ""}`);
+// --only=<phase[,phase]> runs just those phases. Useful because classify and
+// framing share one Groq 70B token/min budget — running them back-to-back
+// starves framing. Run them in separate invocations (or separate minutes).
+//   node scripts/backfill-pipeline.mjs --only=analyze-clusters
+//   node scripts/backfill-pipeline.mjs --only=profile-sources
+const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+const only = onlyArg ? onlyArg.slice(7).split(",").map((s) => s.trim()) : null;
+const want = (phase) => (only ? only.includes(phase) : true);
 
-await runPhase("ingest", 8);          // a few extra source slots
-await runPhase("summarise", 80);      // 8/call, rate-limit-aware — blocks everything downstream
-await runPhase("embed", 15);          // batch endpoint: 40 political articles per call
-if (withClassify) await runPhase("classify"); // 10/call — most expensive per article
-await runPhase("cluster", 2);         // full pass, cheap (no Gemini)
-if (withFraming) {
-  await runPhase("profile-sources", 3);
-  await runPhase("analyze-clusters", 5);
-}
+console.log(`Target: ${FN}`);
+console.log(only ? `Only: ${only.join(", ")}` : `Phases: ingest, summarise, embed, cluster${withClassify ? ", classify" : ""}${withFraming ? ", profile-sources, analyze-clusters" : ""}`);
+
+if (want("ingest"))          await runPhase("ingest", 8);
+if (want("summarise"))       await runPhase("summarise", 80);
+if (want("embed"))           await runPhase("embed", 15);
+if (want("classify") && (only || withClassify)) await runPhase("classify");
+if (want("cluster"))         await runPhase("cluster", 2);
+if (want("profile-sources") && (only || withFraming)) await runPhase("profile-sources", 6);
+if (want("analyze-clusters") && (only || withFraming)) await runPhase("analyze-clusters", 15);
 
 console.log("\nDone. Check counts with the SQL in docs/ops-runbook.md → Database health checks.");
