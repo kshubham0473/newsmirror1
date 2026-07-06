@@ -95,7 +95,10 @@ async function runPhase(phase, maxCalls = 40) {
 
     emptyStreak = n === 0 ? emptyStreak + 1 : 0;
     if (emptyStreak >= 2) { console.log(`  backlog clear for ${phase}.`); return; }
-    await sleep(3000);
+    // Gemini-backed phases run at the free-tier RPM ceiling internally —
+    // give the quota window time to refill between calls.
+    const geminiPhases = ["classify", "profile-sources", "analyze-clusters"];
+    await sleep(geminiPhases.includes(phase) ? 20000 : 3000);
   }
   console.log(`  reached ${maxCalls}-call cap for ${phase} (re-run to continue).`);
 }

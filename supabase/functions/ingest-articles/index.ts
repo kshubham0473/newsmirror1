@@ -35,6 +35,9 @@ const EMBED_BATCH_URL =
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "llama-3.1-8b-instant";
+// Judgment tasks (classify, framing) use the 70B — separate 1,000 req/day
+// free pool, so they can never be starved by the summariser or by Gemini.
+const GROQ_MODEL_SMART = Deno.env.get("GROQ_MODEL_SMART") ?? "llama-3.3-70b-versatile";
 
 // Cosine similarity threshold for clustering — tune via env var without redeployment
 const CLUSTER_THRESHOLD = parseFloat(Deno.env.get("CLUSTER_THRESHOLD") ?? "0.82");
@@ -215,7 +218,7 @@ function failsStageOneFilters(item: RssItem, now: Date): boolean {
 // ─── GEMINI HELPERS ───────────────────────────────────────────────────────────
 
 /** Groq chat call in JSON mode. Throws on API errors (incl. 429). */
-async function groqJson(prompt: string, maxTokens: number): Promise<string> {
+async function groqJson(prompt: string, maxTokens: number, model = GROQ_MODEL): Promise<string> {
   const res = await fetch(GROQ_URL, {
     method: "POST",
     headers: {
@@ -223,7 +226,7 @@ async function groqJson(prompt: string, maxTokens: number): Promise<string> {
       Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
       max_tokens: maxTokens,
@@ -410,17 +413,18 @@ async function classifyArticle(headline: string, summary: string, body: string):
     .replace("{{summary}}", summary)
     .replace("{{body}}", body.slice(0, 1500));
 
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 400 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini classify error: ${await res.text()}`);
-  const data = await res.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+  // Groq 70B primary (own 1k/day pool), Gemini fallback
+  let raw = "";
+  if (GROQ_API_KEY) {
+    try {
+      raw = await groqJson(prompt, 400, GROQ_MODEL_SMART);
+    } catch (groqErr) {
+      console.error("Groq classify failed, falling back to Gemini:", String(groqErr).slice(0, 160));
+      raw = await geminiJson(prompt, 400, 0);
+    }
+  } else {
+    raw = await geminiJson(prompt, 400, 0);
+  }
   if (!raw) throw new Error("Empty classifier response");
 
   let parsed: any;
@@ -1034,17 +1038,18 @@ async function analyzeClusterFraming(
     .replace("{{n}}", String(articles.length))
     .replace("{{articles}}", articleBlock);
 
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini framing error: ${await res.text()}`);
-  const data = await res.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+  // Groq 70B primary (own 1k/day pool), Gemini fallback
+  let raw = "";
+  if (GROQ_API_KEY) {
+    try {
+      raw = await groqJson(prompt, 500, GROQ_MODEL_SMART);
+    } catch (groqErr) {
+      console.error("Groq framing failed, falling back to Gemini:", String(groqErr).slice(0, 160));
+      raw = await geminiJson(prompt, 500, 0.1);
+    }
+  } else {
+    raw = await geminiJson(prompt, 500, 0.1);
+  }
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
     return {
