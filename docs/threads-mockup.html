@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NewsMirror — Threads (Living Issues) · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400..700;9..144,1,400..600&family=Newsreader:opsz,ital,wght@6..72,0,300..600;6..72,1,300..500&family=Archivo:wght@400..700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#111111; --surface:#1c1c1c; --surface-2:#242424;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --tx:#f5f2ee; --tx-2:#a39e96; --tx-3:#6b665e;
+  --blush:#FFE8E5; --blue:#E0F1FF; --cream:#FFF2C5; --card-ink:#151310;
+  --teal:#0E7C7B; --teal-lt:#5BBFB4; --terra:#C4611A; --terra-lt:#E8A265; --sand:#B5A98C;
+  --serif-d:"Fraunces",Georgia,serif; --serif-b:"Newsreader",Georgia,serif; --sans:"Archivo",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0b0b0b;font-family:var(--serif-b);color:var(--tx);min-height:100vh;padding:44px 20px 80px}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .02 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+.spec{max-width:1050px;margin:0 auto 38px}
+.spec h1{font-family:var(--serif-d);font-weight:560;font-size:1.9rem;letter-spacing:-.01em}
+.spec h1 em{font-style:italic;font-weight:400}
+.spec p{font-family:var(--sans);font-size:.8rem;color:var(--tx-2);margin-top:8px;max-width:70ch;line-height:1.65}
+.spec b{color:var(--tx)}
+.legend{display:flex;gap:20px;margin-top:14px;font-family:var(--sans);font-size:.68rem;color:var(--tx-2);flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:6px}
+.dotk{width:10px;height:10px;border-radius:50%}
+
+.stage{display:flex;gap:38px;justify-content:center;align-items:flex-start;flex-wrap:wrap;max-width:1300px;margin:0 auto}
+.col{display:flex;flex-direction:column;align-items:center}
+.plabel{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-2);text-align:center;margin-bottom:12px}
+.phone{width:390px;height:820px;background:var(--bg);border-radius:36px;overflow:hidden;position:relative;
+  box-shadow:0 2px 3px rgba(0,0,0,.5),0 24px 60px -18px rgba(0,0,0,.8),inset 0 0 0 1px rgba(255,255,255,.09)}
+.scroll{height:100%;overflow-y:auto;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+
+.bar{padding:15px 18px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:10}
+.wordmark{font-family:var(--serif-d);font-size:1.18rem;font-weight:600;letter-spacing:-.02em}
+.wordmark span{color:var(--blush);opacity:.5}
+.baricons{display:flex;gap:14px;align-items:center;color:var(--tx-2)}
+.blot{width:26px;height:23px}
+.blot path{fill:var(--teal-lt)}
+
+.spread{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--teal),var(--sand) 50%,var(--terra))}
+.spread i{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+
+.lhead{padding:20px 20px 0}
+.lhead h1{font-family:var(--serif-d);font-size:1.75rem;font-weight:600;letter-spacing:-.02em}
+.lhead h1 em{font-style:italic;font-weight:400}
+.lhead p{font-family:var(--sans);font-size:.78rem;color:var(--tx-2);margin-top:6px;line-height:1.5}
+.lrule{margin:14px 20px 0;border-top:2px solid var(--tx);position:relative}
+.lrule::after{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--line)}
+
+.tcard{margin:14px 16px 0;padding:16px 16px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;position:relative;overflow:hidden}
+.tcard.hot{border-color:rgba(196,97,26,.35)}
+.tstatus{display:inline-flex;align-items:center;gap:6px;font-family:var(--sans);font-size:.56rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+.tstatus.dev{color:var(--terra-lt)}
+.tstatus.dev::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--terra-lt);animation:pulse 2s ease-in-out infinite}
+.tstatus.cool{color:var(--teal-lt)}
+.tstatus.cool::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--teal-lt)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.tcard h2{font-family:var(--serif-d);font-size:1.22rem;line-height:1.18;font-weight:600;margin-top:9px;letter-spacing:-.01em}
+.tcard .gist{margin-top:6px;font-size:.86rem;line-height:1.45;color:var(--tx-2);font-weight:350;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tmeta{display:flex;align-items:center;gap:8px;margin-top:12px;font-family:var(--sans);font-size:.62rem;color:var(--tx-3)}
+.tmeta b{color:var(--tx-2);font-weight:600}
+.tmeta .dot{width:3px;height:3px;border-radius:50%;background:var(--tx-3)}
+.tspread-wrap{margin-top:11px}
+.tspread-lbl{display:flex;justify-content:space-between;font-family:var(--sans);font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-3);margin-bottom:5px}
+
+.pbar{padding:14px 18px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--bg);z-index:10}
+.pback{font-family:var(--sans);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-2);text-decoration:none}
+.phero{padding:20px 20px 0}
+.phero .tstatus{margin-bottom:10px}
+.phero h1{font-family:var(--serif-d);font-size:1.62rem;line-height:1.14;font-weight:600;letter-spacing:-.015em}
+.phero .runline{display:flex;align-items:center;gap:8px;margin-top:10px;font-family:var(--sans);font-size:.64rem;color:var(--tx-3)}
+.phero .runline b{color:var(--tx-2)}
+
+.synth{margin:18px 20px 0;padding:16px;border-radius:12px;background:linear-gradient(160deg,var(--surface-2),var(--surface));border:1px solid var(--line)}
+.synth .kicker{font-family:var(--sans);font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--teal-lt);font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.synth .kicker .upd{color:var(--tx-3);letter-spacing:.04em}
+.synth .stand{margin-top:10px;font-family:var(--serif-b);font-size:.98rem;line-height:1.6;color:var(--tx);font-weight:350}
+.synth .stand b{font-weight:600}
+
+.sides{margin-top:14px;display:flex;flex-direction:column;gap:9px}
+.side{padding:10px 12px;border-left:3px solid;border-radius:0 8px 8px 0;background:rgba(255,255,255,.03)}
+.side.cool{border-color:var(--teal)}
+.side.warm{border-color:var(--terra)}
+.side.mid{border-color:var(--sand)}
+.side .who{font-family:var(--sans);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;font-weight:700;margin-bottom:4px}
+.side.cool .who{color:var(--teal-lt)}
+.side.warm .who{color:var(--terra-lt)}
+.side.mid .who{color:var(--sand)}
+.side p{font-size:.85rem;line-height:1.4;color:var(--tx-2);font-weight:350}
+.disclaimer{margin-top:12px;font-family:var(--sans);font-size:.58rem;font-style:italic;color:var(--tx-3);line-height:1.5}
+
+.spinelbl{display:flex;align-items:center;gap:10px;padding:24px 20px 4px;font-family:var(--sans);font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;color:var(--tx-3);font-weight:600}
+.spinelbl::after{content:"";flex:1;border-top:1px solid var(--line)}
+.spine{position:relative;margin:8px 0 0;padding:0 20px 20px}
+.spine::before{content:"";position:absolute;left:33px;top:6px;bottom:20px;width:2px;background:linear-gradient(180deg,var(--terra),var(--sand),var(--teal))}
+.beat{position:relative;padding:10px 0 16px 34px}
+.beat .node{position:absolute;left:8px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2.5px solid var(--sand);z-index:2}
+.beat.warm .node{border-color:var(--terra)}
+.beat.cool .node{border-color:var(--teal)}
+.beat.big .node{width:16px;height:16px;left:6px;box-shadow:0 0 0 4px rgba(196,97,26,.15)}
+.beat .date{font-family:var(--sans);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-3);font-weight:700}
+.beat h3{font-family:var(--serif-d);font-size:1.02rem;line-height:1.22;font-weight:560;margin-top:5px}
+.beat .what{margin-top:5px;font-size:.84rem;line-height:1.45;color:var(--tx-2);font-weight:350}
+.beat .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{font-family:var(--sans);font-size:.56rem;font-weight:600;padding:3px 8px;border-radius:99px;border:1px solid var(--line-2);color:var(--tx-2)}
+.chip.cool{border-color:rgba(14,124,123,.5);color:var(--teal-lt)}
+.chip.warm{border-color:rgba(196,97,26,.5);color:var(--terra-lt)}
+.beat .srcs{margin-top:8px;font-family:var(--sans);font-size:.58rem;color:var(--tx-3)}
+
+.feedwrap{padding:20px 16px}
+.feedhint{font-family:var(--sans);font-size:.62rem;color:var(--tx-3);text-transform:uppercase;letter-spacing:.14em;text-align:center;margin-bottom:14px}
+.mini{border-radius:16px;background:var(--blush);color:var(--card-ink);padding:14px 16px;margin-bottom:12px;opacity:.5}
+.mini .mk{font-family:var(--sans);font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:rgba(21,19,16,.5)}
+.mini h4{font-family:var(--serif-d);font-size:1.1rem;line-height:1.2;font-weight:600;margin-top:6px}
+
+.threadcard{border-radius:18px;background:var(--card-ink);color:#f2ede4;padding:18px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+.threadcard::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(circle at 15% 0%,rgba(14,124,123,.25),transparent 45%),
+  radial-gradient(circle at 90% 100%,rgba(196,97,26,.25),transparent 45%);pointer-events:none}
+.threadcard .tk{font-family:var(--sans);font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--terra-lt);font-weight:700;display:flex;align-items:center;gap:7px;position:relative}
+.threadcard .tk .live{width:7px;height:7px;border-radius:50%;background:var(--terra-lt);animation:pulse 1.8s ease-in-out infinite}
+.threadcard h3{font-family:var(--serif-d);font-size:1.35rem;line-height:1.16;font-weight:600;margin-top:12px;position:relative}
+.threadcard .tgist{margin-top:8px;font-size:.88rem;line-height:1.5;color:rgba(242,237,228,.75);font-weight:350;position:relative}
+.threadcard .trun{display:flex;align-items:center;gap:8px;margin-top:12px;font-family:var(--sans);font-size:.62rem;color:rgba(242,237,228,.55);position:relative}
+.threadcard .trun b{color:rgba(242,237,228,.9)}
+.threadcard .tspread{margin-top:12px;position:relative}
+.threadcard .cta{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-family:var(--sans);font-size:.72rem;font-weight:700;color:var(--card-ink);background:var(--cream);padding:10px 16px;border-radius:8px;text-decoration:none;position:relative}
+
+.note{max-width:1050px;margin:30px auto 0;padding:16px 20px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.note h3{font-family:var(--sans);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--terra-lt);font-weight:700}
+.note ul{margin:10px 0 0 18px}
+.note li{font-family:var(--sans);font-size:.78rem;color:var(--tx-2);line-height:1.7;margin-bottom:4px}
+.note li b{color:var(--tx)}
+</style>
+</head>
+<body>
+
+<div class="spec">
+  <h1>NewsMirror — <em>Threads</em> (Living Issues)</h1>
+  <p>Mockup for reaction before we build. Three surfaces: <b>(1)</b> the Threads destination — the 5–6 pressing issues that need an all-round opinion; <b>(2)</b> a Thread page — living synthesis on top, day-by-day time-spine below; <b>(3)</b> the rare in-feed Thread card that points inward without stealing reading space. Everything is descriptive of the sides, never prescriptive. Content is illustrative.</p>
+  <div class="legend">
+    <span><i class="dotk" style="background:#0E7C7B"></i> welfare / sceptical / pluralist framing</span>
+    <span><i class="dotk" style="background:#B5A98C"></i> centre</span>
+    <span><i class="dotk" style="background:#C4611A"></i> market / deferential / majoritarian framing</span>
+  </div>
+</div>
+
+<div class="stage">
+
+<!-- 1 · THREADS LIST -->
+<div class="col">
+<div class="plabel">01 · The Threads destination</div>
+<div class="phone"><div class="scroll">
+  <div class="bar">
+    <div class="wordmark">News<span>Mirror</span></div>
+    <div class="baricons">
+      <svg class="blot" viewBox="0 0 30 26"><path d="M15 3 C11 5 7 4 5 8 C3 12 6 14 5 18 C4.5 21 8 24 11 22 C13 20.7 14 21.5 15 21.5 C16 21.5 17 20.7 19 22 C22 24 25.5 21 25 18 C24 14 27 12 25 8 C23 4 19 5 15 3 Z"/></svg>
+    </div>
+  </div>
+  <div class="lhead">
+    <h1>What's <em>developing</em></h1>
+    <p>The issues worth an opinion — followed across every side, as they unfold.</p>
+  </div>
+  <div class="lrule"></div>
+
+  <div class="tcard hot">
+    <span class="tstatus dev">Developing · day 6</span>
+    <h2>E20: the 20% ethanol petrol rollout</h2>
+    <p class="gist">Mandatory 20% ethanol blending is now nationwide. The fight is over mileage, engine wear, and who really benefits.</p>
+    <div class="tmeta"><b>7 outlets</b><span class="dot"></span><span>19 articles</span><span class="dot"></span><span>updated 2h ago</span></div>
+    <div class="tspread-wrap">
+      <div class="tspread-lbl"><span>How outlets frame it</span><span>wide split</span></div>
+      <div class="spread">
+        <i style="left:18%;background:var(--teal)"></i><i style="left:32%;background:var(--teal-lt)"></i>
+        <i style="left:58%;background:var(--sand)"></i><i style="left:78%;background:var(--terra)"></i><i style="left:88%;background:var(--terra)"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="tcard">
+    <span class="tstatus dev">Developing · day 28</span>
+    <h2>Ram Mandir treasury theft probe</h2>
+    <p class="gist">A month into the investigation, arrests and counter-claims mount. Coverage diverges on whether it's lapse, conspiracy, or politics.</p>
+    <div class="tmeta"><b>9 outlets</b><span class="dot"></span><span>41 articles</span><span class="dot"></span><span>updated 5h ago</span></div>
+    <div class="tspread-wrap">
+      <div class="tspread-lbl"><span>How outlets frame it</span><span>wide split</span></div>
+      <div class="spread">
+        <i style="left:22%;background:var(--teal)"></i><i style="left:44%;background:var(--sand)"></i>
+        <i style="left:70%;background:var(--terra)"></i><i style="left:85%;background:var(--terra)"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="tcard">
+    <span class="tstatus cool">Steady · day 12</span>
+    <h2>Special Intensive Revision of electoral rolls</h2>
+    <p class="gist">Voter-roll deletions across states spark a transparency fight ahead of upcoming polls.</p>
+    <div class="tmeta"><b>6 outlets</b><span class="dot"></span><span>23 articles</span><span class="dot"></span><span>updated 1d ago</span></div>
+    <div class="tspread-wrap">
+      <div class="tspread-lbl"><span>How outlets frame it</span><span>moderate</span></div>
+      <div class="spread">
+        <i style="left:26%;background:var(--teal)"></i><i style="left:40%;background:var(--teal-lt)"></i><i style="left:60%;background:var(--sand)"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="tcard">
+    <span class="tstatus cool">Steady · day 9</span>
+    <h2>India–US ceasefire mediation via Pakistan</h2>
+    <p class="gist">Diplomatic channel vs. Trump's rejection — outlets split on who holds the initiative.</p>
+    <div class="tmeta"><b>10 outlets</b><span class="dot"></span><span>28 articles</span><span class="dot"></span><span>updated 8h ago</span></div>
+    <div class="tspread-wrap">
+      <div class="tspread-lbl"><span>How outlets frame it</span><span>moderate</span></div>
+      <div class="spread">
+        <i style="left:30%;background:var(--teal)"></i><i style="left:52%;background:var(--sand)"></i><i style="left:74%;background:var(--terra)"></i>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:22px 0 40px;font-family:var(--serif-d);color:var(--tx-3);font-size:.95rem">❦<br><span style="font-family:var(--sans);font-size:.58rem;letter-spacing:.16em;text-transform:uppercase">4 issues developing this week</span></div>
+</div></div>
+</div>
+
+<!-- 2 · THREAD PAGE -->
+<div class="col">
+<div class="plabel">02 · A Thread — synthesis on top, time-spine below</div>
+<div class="phone"><div class="scroll">
+  <div class="pbar"><a class="pback" href="#">← Threads</a></div>
+  <div class="phero">
+    <span class="tstatus dev">Developing · day 6</span>
+    <h1>E20: the 20% ethanol petrol rollout</h1>
+    <div class="runline"><b>7 outlets</b><span style="width:3px;height:3px;border-radius:50%;background:var(--tx-3)"></span><span>19 articles</span><span style="width:3px;height:3px;border-radius:50%;background:var(--tx-3)"></span><span>1 Jul → today</span></div>
+  </div>
+
+  <div class="synth">
+    <div class="kicker"><span>◑ Where it stands</span><span class="upd">updated 2h ago</span></div>
+    <p class="stand">Ethanol blending in petrol has reached the mandated <b>20%</b> nationwide. Supporters cite <b>energy-import savings and farmer income</b>; critics point to <b>lower mileage, warranty questions on older engines, and who captures the subsidy</b>. The government has not addressed compensation for reduced fuel efficiency, which is where this week's debate has concentrated.</p>
+    <div class="sides">
+      <div class="side warm">
+        <div class="who">ET · Republic · ANI</div>
+        <p>Frame it as an energy-independence and rural-income win; lead with import-bill reduction and sugarcane-farmer gains.</p>
+      </div>
+      <div class="side cool">
+        <div class="who">Scroll · The Hindu · National Herald</div>
+        <p>Centre the consumer cost — mileage drop, engine-wear risk on pre-2023 vehicles, and no compensation mechanism.</p>
+      </div>
+      <div class="side mid">
+        <div class="who">Mint · Indian Express</div>
+        <p>Weigh both: real macro savings, but flag execution gaps and the missing efficiency-loss data.</p>
+      </div>
+    </div>
+    <p class="disclaimer">NewsMirror summarises how outlets are framing this issue. It does not take a position.</p>
+  </div>
+
+  <div class="spinelbl">How it developed</div>
+  <div class="spine">
+    <div class="beat big warm">
+      <span class="node"></span>
+      <div class="date">Today · 6 Jul</div>
+      <h3>Mileage-loss debate dominates as owners report drops</h3>
+      <p class="what">Vehicle owners report 3–6% mileage fall; the debate shifts from policy to compensation. No government response yet.</p>
+      <div class="chips"><span class="chip warm">energy win</span><span class="chip cool">consumer cost</span></div>
+      <div class="srcs">covered by 5 outlets today</div>
+    </div>
+    <div class="beat">
+      <span class="node"></span>
+      <div class="date">4 Jul</div>
+      <h3>Auto industry seeks clarity on warranty for older engines</h3>
+      <p class="what">Manufacturers ask for guidance on E20 compatibility for pre-2023 vehicles.</p>
+      <div class="chips"><span class="chip">industry</span></div>
+      <div class="srcs">covered by 3 outlets</div>
+    </div>
+    <div class="beat cool">
+      <span class="node"></span>
+      <div class="date">3 Jul</div>
+      <h3>Critics question who captures the ethanol subsidy</h3>
+      <p class="what">Reports probe whether gains flow to farmers or to large sugar mills.</p>
+      <div class="chips"><span class="chip cool">subsidy scrutiny</span></div>
+      <div class="srcs">covered by 4 outlets</div>
+    </div>
+    <div class="beat warm">
+      <span class="node"></span>
+      <div class="date">1 Jul</div>
+      <h3>E20 blending target reached nationwide</h3>
+      <p class="what">Government announces 20% ethanol blending achieved, framed as an energy-independence milestone.</p>
+      <div class="chips"><span class="chip warm">milestone</span></div>
+      <div class="srcs">covered by 7 outlets · issue begins</div>
+    </div>
+  </div>
+</div></div>
+</div>
+
+<!-- 3 · IN-FEED CARD -->
+<div class="col">
+<div class="plabel">03 · The rare in-feed Thread card</div>
+<div class="phone"><div class="scroll">
+  <div class="bar">
+    <div class="wordmark">News<span>Mirror</span></div>
+    <div class="baricons">
+      <svg width="15" height="15" viewBox="0 0 18 18" fill="none"><path d="M3 4h12M3 9h12M3 14h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <svg class="blot" viewBox="0 0 30 26"><path d="M15 3 C11 5 7 4 5 8 C3 12 6 14 5 18 C4.5 21 8 24 11 22 C13 20.7 14 21.5 15 21.5 C16 21.5 17 20.7 19 22 C22 24 25.5 21 25 18 C24 14 27 12 25 8 C23 4 19 5 15 3 Z"/></svg>
+    </div>
+  </div>
+  <div class="feedwrap">
+    <div class="feedhint">— as you flick the feed —</div>
+    <div class="mini">
+      <div class="mk">Business</div>
+      <h4>RBI holds repo rate for ninth straight review</h4>
+    </div>
+    <div class="threadcard">
+      <div class="tk"><span class="live"></span> Developing · you keep reading this</div>
+      <h3>E20 ethanol: you've seen 3 sides of this story</h3>
+      <p class="tgist">This issue has run 6 days across 7 outlets. Here's the whole picture — where it stands and how each side frames it — in one place.</p>
+      <div class="trun"><b>19 articles</b><span style="width:3px;height:3px;border-radius:50%;background:rgba(242,237,228,.4)"></span><span>updated 2h ago</span></div>
+      <div class="tspread">
+        <div class="spread">
+          <i style="left:18%;background:var(--teal)"></i><i style="left:32%;background:var(--teal-lt)"></i>
+          <i style="left:58%;background:var(--sand)"></i><i style="left:78%;background:var(--terra)"></i><i style="left:88%;background:var(--terra)"></i>
+        </div>
+      </div>
+      <a class="cta" href="#">Open the thread →</a>
+    </div>
+    <div class="mini" style="margin-top:12px">
+      <div class="mk">Sports</div>
+      <h4>India names squad for the away Test series</h4>
+    </div>
+  </div>
+</div></div>
+</div>
+
+</div>
+
+<div class="note">
+  <h3>Things to flag before we build</h3>
+  <ul>
+    <li><b>Descriptive, not prescriptive.</b> "Where it stands" states facts + each side's framing, with a standing disclaimer. It never says who's right. The brand guardrail, made visible.</li>
+    <li><b>Detection is the hard part.</b> Grouping the right articles into "the E20 issue" (not merging Sikkim + Odisha voter rolls) needs entity extraction + tuning — a few days of calibration, like the cluster threshold.</li>
+    <li><b>The in-feed card is personalized.</b> It surfaces the thread you've <b>already been reading</b> ("you've seen 3 sides"), tying Threads to the affinity engine — so it feels earned, not spammed.</li>
+    <li><b>The spectrum spread bar is the throughline</b> — the same teal↔terracotta dots on the list, the page, and the card. One visual language ties Threads to the feed's flip cards and the Mirror.</li>
+    <li><b>Cold start:</b> we seed 2–3 threads manually so the feature looks alive on day one while auto-detection matures.</li>
+  </ul>
+</div>
+
+</body>
+</html>

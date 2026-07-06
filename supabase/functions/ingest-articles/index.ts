@@ -263,10 +263,13 @@ async function summariseAndTag(
   headline: string,
   body: string,
   language: string
-): Promise<{ summary: string; tags: string[] }> {
+): Promise<{ summary: string; tags: string[]; entities: string[] }> {
   const langNote = language !== "en" ? `The article may be in ${language}. Respond in English regardless.` : "";
 
-  const prompt = `You are processing an Indian news article. Produce a summary AND topic tags in one JSON response.
+  // Entities are extracted in the SAME call as summary+tags — no extra API
+  // request, no added rate-limit pressure. They power issue/Thread detection
+  // and entity-level feed affinity.
+  const prompt = `You are processing an Indian news article. Produce a summary, topic tags, AND key entities in one JSON response.
 
 SUMMARY rules — 80–100 words, written for a reader who will not click through:
 1. What happened (core event, specific and concrete)
@@ -280,27 +283,35 @@ ${langNote}
 
 TAGS rules — 1 to 3 tags from exactly this list: ${TOPIC_LIST.join(", ")}
 
+ENTITIES rules — 2 to 6 canonical names of the specific people, organisations,
+places, policies, schemes, or events this article is ABOUT (not passing mentions).
+Use the common canonical form (e.g. "Narendra Modi", "Supreme Court", "E20 ethanol",
+"Ram Mandir", "RBI"). These identify the ongoing issue, so be consistent — always
+"BJP" not "Bharatiya Janata Party", always "E20 ethanol" not "20% ethanol blend".
+Lowercase-normalise nothing; keep proper capitalisation.
+
 Return ONLY valid JSON, no markdown fences, in this shape:
-{"summary": "…", "tags": ["politics", "economy"]}
+{"summary": "…", "tags": ["politics", "economy"], "entities": ["E20 ethanol", "Nitin Gadkari", "sugar mills"]}
 
 Headline: ${headline}
 
 Article: ${body.slice(0, 2000)}`;
 
   // Groq primary (fast + generous free tier), Gemini fallback — or the
-  // reverse when no Groq key is configured.
+  // reverse when no Groq key is configured. Slightly higher token budget to
+  // fit the entities array alongside the summary.
   let raw = "";
   if (GROQ_API_KEY) {
     try {
-      raw = await groqJson(prompt, 450);
+      raw = await groqJson(prompt, 550);
     } catch (groqErr) {
       console.error("Groq summarise failed, falling back to Gemini:", String(groqErr).slice(0, 160));
-      raw = await geminiJson(prompt, 450);
+      raw = await geminiJson(prompt, 550);
     }
   } else {
-    raw = await geminiJson(prompt, 450);
+    raw = await geminiJson(prompt, 550);
   }
-  if (!raw) return { summary: "", tags: [] };
+  if (!raw) return { summary: "", tags: [], entities: [] };
 
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
@@ -308,11 +319,17 @@ Article: ${body.slice(0, 2000)}`;
     const tags = Array.isArray(parsed.tags)
       ? parsed.tags.filter((t: string) => TOPIC_LIST.includes(t)).slice(0, 3)
       : [];
-    return { summary, tags };
+    const entities = Array.isArray(parsed.entities)
+      ? parsed.entities
+          .filter((e: unknown) => typeof e === "string" && e.trim().length > 1 && e.trim().length < 60)
+          .map((e: string) => e.trim())
+          .slice(0, 6)
+      : [];
+    return { summary, tags, entities };
   } catch {
     // Model ignored the JSON instruction — salvage the text as a summary
     console.error("summariseAndTag: non-JSON response, salvaging as plain summary");
-    return { summary: raw.slice(0, 800), tags: [] };
+    return { summary: raw.slice(0, 800), tags: [], entities: [] };
   }
 }
 
@@ -579,7 +596,7 @@ async function handleSummarise(): Promise<Response> {
       results.processed++;
       try {
         const language = langMap[(article as any).source_id] ?? "en";
-        const { summary, tags } = await summariseAndTag(
+        const { summary, tags, entities } = await summariseAndTag(
           (article as any).headline,
           (article as any).body ?? "",
           language
@@ -591,7 +608,7 @@ async function handleSummarise(): Promise<Response> {
         } else {
           const { error: updateErr } = await supabase
             .from("articles")
-            .update({ summary, topic_tags: tags })
+            .update({ summary, topic_tags: tags, key_entities: entities })
             .eq("id", (article as any).id);
 
           if (updateErr) {
