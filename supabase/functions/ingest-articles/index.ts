@@ -413,13 +413,18 @@ async function classifyArticle(headline: string, summary: string, body: string):
     .replace("{{summary}}", summary)
     .replace("{{body}}", body.slice(0, 1500));
 
-  // Groq 70B primary (own 1k/day pool), Gemini fallback
+  // Groq 70B primary (own 1k/day pool), Gemini fallback.
+  // On a rate limit, re-throw immediately — do NOT fall back per-article,
+  // or a saturated minute pounds Gemini into the ground too. The caller
+  // catches the 429 and breaks the batch to cool off.
   let raw = "";
   if (GROQ_API_KEY) {
     try {
       raw = await groqJson(prompt, 400, GROQ_MODEL_SMART);
     } catch (groqErr) {
-      console.error("Groq classify failed, falling back to Gemini:", String(groqErr).slice(0, 160));
+      const m = String(groqErr);
+      if (m.includes("429") || m.toLowerCase().includes("rate")) throw groqErr;
+      console.error("Groq classify failed (non-rate), falling back to Gemini:", m.slice(0, 160));
       raw = await geminiJson(prompt, 400, 0);
     }
   } else {
@@ -693,6 +698,10 @@ async function handleClassify(): Promise<Response> {
       .from("articles")
       .select("id, source_id, headline, summary, body, published_at")
       .is("identity_score", null)
+      // Unclassifiable articles keep NULL scores but DO get a rationale —
+      // without this filter they're re-picked forever (the historic
+      // "articles getting skipped" bug: the head of the queue loops).
+      .is("classifier_rationale", null)
       .not("summary", "is", null)
       .neq("summary", "")
       // Political articles first — the only ones that feed source profiles
@@ -797,6 +806,7 @@ async function handleProfileSources(): Promise<Response> {
           .select("id, headline, summary, body")
           .eq("source_id", (source as any).id)
           .is("identity_score", null)
+          .is("classifier_rationale", null) // skip already-judged unclassifiable
           .not("summary", "is", null)
           .neq("summary", "")
           .overlaps("topic_tags", POLITICAL_TAGS)
@@ -1038,13 +1048,16 @@ async function analyzeClusterFraming(
     .replace("{{n}}", String(articles.length))
     .replace("{{articles}}", articleBlock);
 
-  // Groq 70B primary (own 1k/day pool), Gemini fallback
+  // Groq 70B primary (own 1k/day pool), Gemini fallback.
+  // Re-throw on rate limit so the batch breaks instead of hammering Gemini.
   let raw = "";
   if (GROQ_API_KEY) {
     try {
       raw = await groqJson(prompt, 500, GROQ_MODEL_SMART);
     } catch (groqErr) {
-      console.error("Groq framing failed, falling back to Gemini:", String(groqErr).slice(0, 160));
+      const m = String(groqErr);
+      if (m.includes("429") || m.toLowerCase().includes("rate")) throw groqErr;
+      console.error("Groq framing failed (non-rate), falling back to Gemini:", m.slice(0, 160));
       raw = await geminiJson(prompt, 500, 0.1);
     }
   } else {
