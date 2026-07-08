@@ -1506,13 +1506,18 @@ const ENTITY_SYNONYMS: [RegExp, string][] = [
 // Issues are things that happen or get decided — never people/places/orgs.
 const ANCHOR_TYPES = new Set(["policy", "event", "scheme", "case", "bill", "project", "controversy"]);
 
+const MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+const DATE_ENTITY_RE = new RegExp(`^(?:(?:${MONTHS})\\.?\\s*\\d{1,2}|\\d{1,2}\\s*(?:${MONTHS})|\\d{4})$`, "i");
+
 /** Normalize an entity to a grouping key. Display form is chosen separately. */
 function normalizeEntity(e: string): string {
   let k = e.toLowerCase().trim();
+  if (DATE_ENTITY_RE.test(k)) return "";        // dates are not entities ("July 9")
   k = k.replace(/\s*\([^)]*\)\s*/g, " ");      // strip parentheticals: "SIR (electoral rolls)"
   k = k.replace(/['’]s\b/g, "");                // possessives
   for (const [re, sub] of ENTITY_SYNONYMS) k = k.replace(re, sub);
   k = k.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  if (DATE_ENTITY_RE.test(k)) return "";
   return k;
 }
 
@@ -1618,6 +1623,17 @@ async function handleDetectThreads(): Promise<Response> {
       }
     }
 
+    // Type resolution for any entity group: per-article votes, then directory.
+    const resolveType = (r: Ent): string | null => {
+      if (r.types.size > 0) return [...r.types.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      const votes = new Map<string, number>();
+      for (const [form, n] of r.forms.entries()) {
+        const t = dirMap.get(form.toLowerCase().trim());
+        if (t) votes.set(t, (votes.get(t) ?? 0) + n);
+      }
+      return votes.size > 0 ? [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;
+    };
+
     // ── Anchor eligibility ──
     const corpusSize = results.corpus;
     const qualifying: [string, Ent][] = [];
@@ -1625,21 +1641,30 @@ async function handleDetectThreads(): Promise<Response> {
       if (r.days.size < THREAD_MIN_DAYS || r.arts.size < THREAD_MIN_ARTICLES || r.srcs.size < THREAD_MIN_SOURCES) continue;
       if (ANCHOR_STOPLIST.has(k)) { results.stoplisted++; continue; }
       if (r.arts.size / corpusSize > THREAD_MAX_DF) { results.too_generic++; continue; }
-      // Type gate: people/places/orgs/parties can never anchor an issue.
-      // Type resolution: per-article entity_types votes first, then the
-      // entity_directory (keyed by lowercased surface form).
-      let topType: string | null = null;
-      if (r.types.size > 0) {
-        topType = [...r.types.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      } else {
-        const votes = new Map<string, number>();
-        for (const [form, n] of r.forms.entries()) {
-          const t = dirMap.get(form.toLowerCase().trim());
-          if (t) votes.set(t, (votes.get(t) ?? 0) + n);
+
+      const topType = resolveType(r);
+      if (topType && !ANCHOR_TYPES.has(topType)) {
+        // Participant-named candidate (person/org/place/party). Real issues are
+        // often carried by a participant name ("Iran" = the ceasefire, "Mamata
+        // Banerjee" = the EC fight) — allow ONLY with issue-evidence: an
+        // issue-typed entity co-occurring in ≥20% of its articles. Diffuse
+        // participant clouds ("police" across unrelated crime stories) fail this.
+        const coCount = new Map<string, number>();
+        for (const id of r.arts) {
+          for (const k2 of artKeys.get(id) ?? []) {
+            if (k2 === k) continue;
+            coCount.set(k2, (coCount.get(k2) ?? 0) + 1);
+          }
         }
-        if (votes.size > 0) topType = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        let evidence = false;
+        for (const [k2, c] of coCount.entries()) {
+          if (c < Math.max(2, r.arts.size * 0.2)) continue;
+          const g2 = idx.get(k2);
+          const t2 = g2 ? resolveType(g2) : null;
+          if (t2 && ANCHOR_TYPES.has(t2)) { evidence = true; break; }
+        }
+        if (!evidence) { results.type_blocked++; continue; }
       }
-      if (topType && !ANCHOR_TYPES.has(topType)) { results.type_blocked++; continue; }
       qualifying.push([k, r]);
     }
     qualifying.sort((a, b) => (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size));
