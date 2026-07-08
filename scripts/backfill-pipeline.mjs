@@ -128,5 +128,6 @@ if (want("analyze-clusters") && (only || withFraming)) await runPhase("analyze-c
 if (only && want("backfill-entities")) await runPhase("backfill-entities", 80);
 if (only && want("type-entities"))     await runPhase("type-entities", 12);
 if (only && want("detect-threads"))    await runPhase("detect-threads", 1);
+if (only && want("curate-threads"))    await runPhase("curate-threads", 2);
 
 console.log("\nDone. Check counts with the SQL in docs/ops-runbook.md → Database health checks.");

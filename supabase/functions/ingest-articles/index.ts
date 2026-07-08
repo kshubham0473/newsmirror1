@@ -1594,7 +1594,9 @@ async function handleDetectThreads(): Promise<Response> {
       const parent = keysBySize[i];
       if (aliasOf.has(parent)) continue;
       const pTok = tokens(parent);
-      if (pTok.size === 0) continue;
+      // Single-token parents ("temple", "police") are too generic to absorb
+      // specific children — that's how "temple" once swallowed "ram temple".
+      if (pTok.size < 2) continue;
       for (let j = i + 1; j < keysBySize.length; j++) {
         const child = keysBySize[j];
         if (aliasOf.has(child)) continue;
@@ -1649,7 +1651,17 @@ async function handleDetectThreads(): Promise<Response> {
       // that E20 then claimed away, leaving a junk thread.)
       qualifying.push([k, r]);
     }
-    qualifying.sort((a, b) => (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size));
+    // Issue-typed anchors claim first (within each tier: by persistence×volume) —
+    // a diffuse participant thread must never steal articles from a real issue.
+    const tierOf = (r: Ent) => {
+      const t = resolveType(r);
+      return t && ANCHOR_TYPES.has(t) ? 0 : 1;
+    };
+    qualifying.sort((a, b) => {
+      const tier = tierOf(a[1]) - tierOf(b[1]);
+      if (tier !== 0) return tier;
+      return (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size);
+    });
     results.candidates = qualifying.length;
 
     const claimed = new Set<string>();
@@ -1706,23 +1718,21 @@ async function handleDetectThreads(): Promise<Response> {
 
       const dates = own.map((id) => artDate.get(id)).filter(Boolean).sort();
       const last = dates[dates.length - 1] ?? null;
-      // Lifecycle from recency of coverage
-      const ageDays = last ? (Date.now() - new Date(last).getTime()) / 864e5 : 99;
-      const status = ageDays <= 3 ? "developing" : ageDays <= 7 ? "steady" : "dormant";
 
       try {
+        // Status is NOT written here: new rows default to 'candidate' (awaiting
+        // the curator), and existing rows keep their curated/rejected status.
+        // Detection only refreshes facts; the curator owns judgment.
         const { data: thread, error: tErr } = await supabase
           .from("threads")
           .upsert({
             anchor_key: key,
             anchor_entity: display,
-            title: display,
             key_entities: [display, ...related],
             article_count: own.length,
             source_count: ownSrcs.size,
             first_seen: dates[0] ?? null,
             last_article_at: last,
-            status,
             updated_at: runStart,
           }, { onConflict: "anchor_key" })
           .select("id")
@@ -1745,10 +1755,146 @@ async function handleDetectThreads(): Promise<Response> {
       }
     }
 
-    // Threads not refreshed this run have aged out of the window → dormant
-    await supabase.from("threads").update({ status: "dormant" }).lt("updated_at", runStart);
+    // Lifecycle maintenance (never touches 'rejected'):
+    // stale threads (not refreshed this run) → dormant
+    await supabase.from("threads").update({ status: "dormant" })
+      .lt("updated_at", runStart).neq("status", "rejected");
+    // curated + fresh coverage → developing / steady
+    const d3 = new Date(Date.now() - 3 * 864e5).toISOString();
+    const d7 = new Date(Date.now() - 7 * 864e5).toISOString();
+    await supabase.from("threads").update({ status: "developing" })
+      .gte("updated_at", runStart).not("curated_at", "is", null)
+      .neq("status", "rejected").gte("last_article_at", d3);
+    await supabase.from("threads").update({ status: "steady" })
+      .gte("updated_at", runStart).not("curated_at", "is", null)
+      .neq("status", "rejected").gte("last_article_at", d7).lt("last_article_at", d3);
   } catch (err) {
     console.error("Fatal detect-threads error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
+// ─── HANDLER: CURATE THREADS ──────────────────────────────────────────────────
+//
+// The judgment layer: heuristic detection generates candidates (recall);
+// ONE Groq-70B call per run curates them (precision) — keeps genuine ongoing
+// national issues, rejects diffuse participant clouds, merges duplicates,
+// writes neutral human titles. Runs after detect-threads, once daily.
+
+async function handleCurateThreads(): Promise<Response> {
+  const results = { candidates: 0, kept: 0, rejected: 0, merged: 0, errors: 0, rate_limited: false };
+
+  try {
+    const { data: cands, error } = await supabase
+      .from("threads")
+      .select("id, anchor_key, anchor_entity, key_entities, article_count, source_count, first_seen, last_article_at")
+      .eq("status", "candidate")
+      .order("article_count", { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+    if (!cands?.length) {
+      return Response.json({ message: "No candidate threads pending curation", results });
+    }
+    results.candidates = cands.length;
+
+    // Sample headlines give the curator real content to judge
+    const samples = new Map<string, string[]>();
+    for (const c of cands as any[]) {
+      const { data: arts } = await supabase
+        .from("thread_articles")
+        .select("articles(headline)")
+        .eq("thread_id", c.id)
+        .limit(5);
+      samples.set(c.id, (arts ?? []).map((r: any) => r.articles?.headline).filter(Boolean));
+    }
+
+    const listing = (cands as any[]).map((c, i) => {
+      const days = c.first_seen && c.last_article_at
+        ? Math.max(1, Math.round((new Date(c.last_article_at).getTime() - new Date(c.first_seen).getTime()) / 864e5))
+        : 1;
+      return `${i + 1}. anchor: "${c.anchor_entity}" | entities: ${(c.key_entities ?? []).join(", ")} | ${c.article_count} articles, ${c.source_count} sources, ~${days} days
+   sample headlines: ${(samples.get(c.id) ?? []).map((h: string) => `"${h.slice(0, 90)}"`).join(" · ")}`;
+    }).join("\n\n");
+
+    const prompt = `You curate "Threads" for an Indian news app: durable, ongoing NATIONAL issues that readers follow over days/weeks to form an informed opinion (policy debates, major probes, geopolitical crises, significant controversies).
+
+Below are machine-detected candidates. For each, decide:
+- "keep"   — a genuine ongoing issue. Give it a neutral, specific, human title (≤60 chars) that names the ISSUE, not a person (e.g. "Ram Mandir treasury theft probe", not "SIT").
+- "drop"   — not an issue: diffuse clouds around a generic entity (e.g. unrelated crime stories sharing "police"), entertainment/sports promo, market noise, one-off events with no ongoing arc.
+- "merge"  — same underlying issue as another candidate; give the target number and one title.
+
+Titles must be strictly neutral and descriptive — never take a side.
+
+Return ONLY valid JSON:
+{"decisions": [{"n": 1, "action": "keep", "title": "..."}, {"n": 2, "action": "drop"}, {"n": 3, "action": "merge", "into": 1, "title": "..."}]}
+
+Candidates:
+${listing}`;
+
+    let raw = "";
+    try {
+      raw = GROQ_API_KEY ? await groqJson(prompt, 900, GROQ_MODEL_SMART) : await geminiJson(prompt, 900);
+    } catch (e) {
+      const m = String(e);
+      if (m.includes("429") || m.toLowerCase().includes("rate")) {
+        results.rate_limited = true;
+        return Response.json({ message: "Curator rate-limited; retry shortly", results });
+      }
+      throw e;
+    }
+
+    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+    const decisions: any[] = Array.isArray(parsed.decisions) ? parsed.decisions : [];
+    const byN = (n: number) => (cands as any[])[n - 1];
+    const now = new Date().toISOString();
+    const d3 = new Date(Date.now() - 3 * 864e5).toISOString();
+
+    // Apply merges first so targets exist before keeps finalize
+    for (const d of decisions.filter((x) => x.action === "merge")) {
+      const src = byN(d.n); const tgt = byN(d.into);
+      if (!src || !tgt || src.id === tgt.id) continue;
+      try {
+        const { data: links } = await supabase.from("thread_articles").select("article_id").eq("thread_id", src.id);
+        if (links?.length) {
+          await supabase.from("thread_articles").upsert(
+            (links as any[]).map((l) => ({ thread_id: tgt.id, article_id: l.article_id })),
+            { onConflict: "thread_id,article_id" }
+          );
+        }
+        await supabase.from("threads").update({
+          status: "rejected", curated_at: now, curator_note: `merged into ${tgt.anchor_entity}`,
+        }).eq("id", src.id);
+        if (typeof d.title === "string" && d.title.trim()) {
+          await supabase.from("threads").update({ title: d.title.trim().slice(0, 80) }).eq("id", tgt.id);
+        }
+        results.merged++;
+      } catch (e) { console.error("[curate] merge error:", e); results.errors++; }
+    }
+
+    for (const d of decisions.filter((x) => x.action === "keep" || x.action === "drop")) {
+      const t = byN(d.n);
+      if (!t) continue;
+      try {
+        if (d.action === "drop") {
+          await supabase.from("threads").update({
+            status: "rejected", curated_at: now, curator_note: "curator: not an ongoing issue",
+          }).eq("id", t.id);
+          results.rejected++;
+        } else {
+          const status = t.last_article_at && t.last_article_at >= d3 ? "developing" : "steady";
+          await supabase.from("threads").update({
+            status, curated_at: now,
+            title: typeof d.title === "string" && d.title.trim() ? d.title.trim().slice(0, 80) : t.anchor_entity,
+          }).eq("id", t.id);
+          results.kept++;
+        }
+      } catch (e) { console.error("[curate] apply error:", e); results.errors++; }
+    }
+  } catch (err) {
+    console.error("Fatal curate-threads error:", err);
     return Response.json({ error: String(err), results }, { status: 500 });
   }
 
@@ -1772,6 +1918,7 @@ Deno.serve(async (req) => {
   if (phase === "backfill-entities") return handleBackfillEntities();
   if (phase === "type-entities")    return handleTypeEntities();
   if (phase === "detect-threads")   return handleDetectThreads();
+  if (phase === "curate-threads")   return handleCurateThreads();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });
