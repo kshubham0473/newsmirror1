@@ -126,6 +126,7 @@ if (want("analyze-clusters") && (only || withFraming)) await runPhase("analyze-c
 //   node scripts/backfill-pipeline.mjs --only=backfill-entities   (one-time bootstrap)
 //   node scripts/backfill-pipeline.mjs --only=detect-threads      (free, no LLM)
 if (only && want("backfill-entities")) await runPhase("backfill-entities", 80);
+if (only && want("type-entities"))     await runPhase("type-entities", 12);
 if (only && want("detect-threads"))    await runPhase("detect-threads", 1);
 
 console.log("\nDone. Check counts with the SQL in docs/ops-runbook.md → Database health checks.");

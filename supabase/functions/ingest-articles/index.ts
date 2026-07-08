@@ -1395,6 +1395,70 @@ async function handleBackfillEntities(): Promise<Response> {
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
+// ─── HANDLER: TYPE ENTITIES ───────────────────────────────────────────────────
+//
+// Types UNIQUE entity strings (not articles): ~60 per LLM call into a permanent
+// entity_directory. One-time cost ≈ corpus_unique/60 calls; then a tiny daily
+// top-up for new entities. The directory types every past and future occurrence,
+// and is the seed of a canonical entity registry.
+
+async function handleTypeEntities(): Promise<Response> {
+  const PER_CALL = 60;
+  const MAX_CALLS = 6; // per invocation; script loops until "nothing pending"
+  const results = { unique_pending: 0, typed: 0, calls: 0, errors: 0, rate_limited: false };
+
+  try {
+    // Distinct entities in the recent window not yet in the directory
+    const sinceIso = new Date(Date.now() - 21 * 864e5).toISOString();
+    const { data: rows, error } = await supabase.rpc("pending_entities", { p_since: sinceIso, p_limit: PER_CALL * MAX_CALLS });
+    if (error) throw error;
+    const pending: { key: string; display: string }[] = (rows ?? []) as any[];
+    results.unique_pending = pending.length;
+    if (!pending.length) {
+      return Response.json({ message: "No entities pending typing", results });
+    }
+
+    for (let i = 0; i < pending.length; i += PER_CALL) {
+      const batch = pending.slice(i, i + PER_CALL);
+      results.calls++;
+      const listing = batch.map((e, n) => `${n + 1}. ${e.display}`).join("\n");
+      const prompt = `Classify each Indian-news entity below into exactly one type from:
+person, org, place, party, policy, scheme, event, case, bill, project, controversy, other.
+"party" = political party. Government bodies, courts, companies, media = "org".
+Policies/rollouts like "E20 ethanol" = "policy". Probes/trials = "case".
+
+Return ONLY valid JSON mapping each number to a type, e.g. {"1": "person", "2": "policy"}
+
+Entities:
+${listing}`;
+
+      try {
+        const raw = GROQ_API_KEY ? await groqJson(prompt, 700) : await geminiJson(prompt, 700);
+        const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+        const upserts = batch.map((e, n) => ({
+          entity_key: e.key,
+          display: e.display,
+          entity_type: typeof parsed[String(n + 1)] === "string" ? parsed[String(n + 1)].toLowerCase().trim() : "other",
+        }));
+        const { error: uErr } = await supabase.from("entity_directory").upsert(upserts, { onConflict: "entity_key" });
+        if (uErr) { console.error("[type-entities] upsert error:", uErr); results.errors++; }
+        else results.typed += upserts.length;
+      } catch (e) {
+        const m = String(e);
+        console.error("[type-entities] batch error:", m.slice(0, 200));
+        results.errors++;
+        if (m.includes("429") || m.toLowerCase().includes("rate")) { results.rate_limited = true; break; }
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  } catch (err) {
+    console.error("Fatal type-entities error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
 // ─── HANDLER: DETECT THREADS ──────────────────────────────────────────────────
 //
 // Phase 2 of Threads. NO LLM — pure entity heuristic, so it costs nothing to run.
@@ -1458,7 +1522,7 @@ function tokens(k: string): Set<string> {
 
 async function handleDetectThreads(): Promise<Response> {
   const results = {
-    corpus: 0, candidates: 0, stoplisted: 0, too_generic: 0,
+    corpus: 0, candidates: 0, stoplisted: 0, too_generic: 0, type_blocked: 0,
     alias_merges: 0, threads_upserted: 0, articles_linked: 0, errors: 0,
   };
 
@@ -1479,6 +1543,11 @@ async function handleDetectThreads(): Promise<Response> {
       return Response.json({ message: "No recent political articles with entities", results });
     }
     results.corpus = articles.length;
+
+    // Entity directory: types for unique entity strings (lower(surface form) → type)
+    const dirMap = new Map<string, string>();
+    const { data: dirRows } = await supabase.from("entity_directory").select("entity_key, entity_type").limit(10000);
+    for (const d of (dirRows ?? []) as any[]) dirMap.set(d.entity_key, d.entity_type);
 
     // ── Build normalized entity index ──
     // key -> stats + surface-form counts + type votes
@@ -1556,11 +1625,21 @@ async function handleDetectThreads(): Promise<Response> {
       if (r.days.size < THREAD_MIN_DAYS || r.arts.size < THREAD_MIN_ARTICLES || r.srcs.size < THREAD_MIN_SOURCES) continue;
       if (ANCHOR_STOPLIST.has(k)) { results.stoplisted++; continue; }
       if (r.arts.size / corpusSize > THREAD_MAX_DF) { results.too_generic++; continue; }
-      // Typed data (accruing since v41): people/places/orgs can never anchor
+      // Type gate: people/places/orgs/parties can never anchor an issue.
+      // Type resolution: per-article entity_types votes first, then the
+      // entity_directory (keyed by lowercased surface form).
+      let topType: string | null = null;
       if (r.types.size > 0) {
-        const topType = [...r.types.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        if (!ANCHOR_TYPES.has(topType)) continue;
+        topType = [...r.types.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      } else {
+        const votes = new Map<string, number>();
+        for (const [form, n] of r.forms.entries()) {
+          const t = dirMap.get(form.toLowerCase().trim());
+          if (t) votes.set(t, (votes.get(t) ?? 0) + n);
+        }
+        if (votes.size > 0) topType = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
       }
+      if (topType && !ANCHOR_TYPES.has(topType)) { results.type_blocked++; continue; }
       qualifying.push([k, r]);
     }
     qualifying.sort((a, b) => (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size));
@@ -1661,6 +1740,7 @@ Deno.serve(async (req) => {
   if (phase === "analyze-clusters") return handleAnalyzeClusters();
   if (phase === "enrich-images")    return handleEnrichImages();
   if (phase === "backfill-entities") return handleBackfillEntities();
+  if (phase === "type-entities")    return handleTypeEntities();
   if (phase === "detect-threads")   return handleDetectThreads();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
