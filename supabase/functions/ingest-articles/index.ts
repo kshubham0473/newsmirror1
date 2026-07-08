@@ -1642,29 +1642,11 @@ async function handleDetectThreads(): Promise<Response> {
       if (ANCHOR_STOPLIST.has(k)) { results.stoplisted++; continue; }
       if (r.arts.size / corpusSize > THREAD_MAX_DF) { results.too_generic++; continue; }
 
-      const topType = resolveType(r);
-      if (topType && !ANCHOR_TYPES.has(topType)) {
-        // Participant-named candidate (person/org/place/party). Real issues are
-        // often carried by a participant name ("Iran" = the ceasefire, "Mamata
-        // Banerjee" = the EC fight) — allow ONLY with issue-evidence: an
-        // issue-typed entity co-occurring in ≥20% of its articles. Diffuse
-        // participant clouds ("police" across unrelated crime stories) fail this.
-        const coCount = new Map<string, number>();
-        for (const id of r.arts) {
-          for (const k2 of artKeys.get(id) ?? []) {
-            if (k2 === k) continue;
-            coCount.set(k2, (coCount.get(k2) ?? 0) + 1);
-          }
-        }
-        let evidence = false;
-        for (const [k2, c] of coCount.entries()) {
-          if (c < Math.max(2, r.arts.size * 0.2)) continue;
-          const g2 = idx.get(k2);
-          const t2 = g2 ? resolveType(g2) : null;
-          if (t2 && ANCHOR_TYPES.has(t2)) { evidence = true; break; }
-        }
-        if (!evidence) { results.type_blocked++; continue; }
-      }
+      // Participant-typed candidates (person/org/place/party) stay in the pool —
+      // their issue-evidence check happens at CLAIM time, over the articles they
+      // would actually own after bigger issue-threads have claimed theirs.
+      // (Checking earlier let "Narendra Modi" borrow evidence from E20 articles
+      // that E20 then claimed away, leaving a junk thread.)
       qualifying.push([k, r]);
     }
     qualifying.sort((a, b) => (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size));
@@ -1678,6 +1660,29 @@ async function handleDetectThreads(): Promise<Response> {
       if (own.length < THREAD_MIN_ARTICLES) continue;
       const ownSrcs = new Set(own.map((id) => artSrc.get(id)).filter(Boolean));
       if (ownSrcs.size < THREAD_MIN_SOURCES) continue;
+
+      // Issue-evidence gate for participant-typed anchors, evaluated over the
+      // articles this thread would ACTUALLY own: an issue-typed co-entity must
+      // appear in ≥25% of them (min 3). "Iran"+ceasefire passes; "Modi" over
+      // leftover diffuse coverage and "police" over unrelated crime don't.
+      const anchorType = resolveType(r);
+      if (anchorType && !ANCHOR_TYPES.has(anchorType)) {
+        const coCount = new Map<string, number>();
+        for (const id of own) {
+          for (const k2 of artKeys.get(id) ?? []) {
+            if (k2 === key) continue;
+            coCount.set(k2, (coCount.get(k2) ?? 0) + 1);
+          }
+        }
+        let evidence = false;
+        for (const [k2, c] of coCount.entries()) {
+          if (c < Math.max(3, own.length * 0.25)) continue;
+          const g2 = idx.get(k2);
+          const t2 = g2 ? resolveType(g2) : null;
+          if (t2 && ANCHOR_TYPES.has(t2)) { evidence = true; break; }
+        }
+        if (!evidence) { results.type_blocked++; continue; }
+      }
 
       // Display form = most frequent raw surface form
       const display = [...r.forms.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? key;
