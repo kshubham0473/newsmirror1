@@ -263,7 +263,7 @@ async function summariseAndTag(
   headline: string,
   body: string,
   language: string
-): Promise<{ summary: string; tags: string[]; entities: string[] }> {
+): Promise<{ summary: string; tags: string[]; entities: string[]; entityTypes: Record<string, string> }> {
   const langNote = language !== "en" ? `The article may be in ${language}. Respond in English regardless.` : "";
 
   // Entities are extracted in the SAME call as summary+tags — no extra API
@@ -283,15 +283,13 @@ ${langNote}
 
 TAGS rules — 1 to 3 tags from exactly this list: ${TOPIC_LIST.join(", ")}
 
-ENTITIES rules — 2 to 6 canonical names of the specific people, organisations,
-places, policies, schemes, or events this article is ABOUT (not passing mentions).
-Use the common canonical form (e.g. "Narendra Modi", "Supreme Court", "E20 ethanol",
-"Ram Mandir", "RBI"). These identify the ongoing issue, so be consistent — always
-"BJP" not "Bharatiya Janata Party", always "E20 ethanol" not "20% ethanol blend".
-Lowercase-normalise nothing; keep proper capitalisation.
+ENTITIES rules — 2 to 6 canonical entities this article is ABOUT (not passing mentions),
+each with a type from: person, org, place, party, policy, scheme, event, case, bill, project, controversy.
+Use the common canonical form and be consistent — always "BJP" not "Bharatiya Janata Party",
+always "E20 ethanol" not "20% ethanol blend". Keep proper capitalisation.
 
 Return ONLY valid JSON, no markdown fences, in this shape:
-{"summary": "…", "tags": ["politics", "economy"], "entities": ["E20 ethanol", "Nitin Gadkari", "sugar mills"]}
+{"summary": "…", "tags": ["politics", "economy"], "entities": [{"name": "E20 ethanol", "type": "policy"}, {"name": "Nitin Gadkari", "type": "person"}]}
 
 Headline: ${headline}
 
@@ -311,7 +309,7 @@ Article: ${body.slice(0, 2000)}`;
   } else {
     raw = await geminiJson(prompt, 550);
   }
-  if (!raw) return { summary: "", tags: [], entities: [] };
+  if (!raw) return { summary: "", tags: [], entities: [], entityTypes: {} };
 
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
@@ -319,18 +317,33 @@ Article: ${body.slice(0, 2000)}`;
     const tags = Array.isArray(parsed.tags)
       ? parsed.tags.filter((t: string) => TOPIC_LIST.includes(t)).slice(0, 3)
       : [];
-    const entities = Array.isArray(parsed.entities)
-      ? parsed.entities
-          .filter((e: unknown) => typeof e === "string" && e.trim().length > 1 && e.trim().length < 60)
-          .map((e: string) => e.trim())
-          .slice(0, 6)
-      : [];
-    return { summary, tags, entities };
+    const { entities, entityTypes } = parseEntityList(parsed.entities);
+    return { summary, tags, entities, entityTypes };
   } catch {
     // Model ignored the JSON instruction — salvage the text as a summary
     console.error("summariseAndTag: non-JSON response, salvaging as plain summary");
-    return { summary: raw.slice(0, 800), tags: [], entities: [] };
+    return { summary: raw.slice(0, 800), tags: [], entities: [], entityTypes: {} };
   }
+}
+
+/** Accepts both typed objects [{name,type}] and legacy plain strings. */
+function parseEntityList(rawList: unknown): { entities: string[]; entityTypes: Record<string, string> } {
+  const entities: string[] = [];
+  const entityTypes: Record<string, string> = {};
+  if (Array.isArray(rawList)) {
+    for (const item of rawList.slice(0, 6)) {
+      if (typeof item === "string" && item.trim().length > 1 && item.trim().length < 60) {
+        entities.push(item.trim());
+      } else if (item && typeof item === "object" && typeof (item as any).name === "string") {
+        const name = (item as any).name.trim();
+        if (name.length > 1 && name.length < 60) {
+          entities.push(name);
+          if (typeof (item as any).type === "string") entityTypes[name] = (item as any).type.toLowerCase().trim();
+        }
+      }
+    }
+  }
+  return { entities, entityTypes };
 }
 
 /**
@@ -596,7 +609,7 @@ async function handleSummarise(): Promise<Response> {
       results.processed++;
       try {
         const language = langMap[(article as any).source_id] ?? "en";
-        const { summary, tags, entities } = await summariseAndTag(
+        const { summary, tags, entities, entityTypes } = await summariseAndTag(
           (article as any).headline,
           (article as any).body ?? "",
           language
@@ -608,7 +621,7 @@ async function handleSummarise(): Promise<Response> {
         } else {
           const { error: updateErr } = await supabase
             .from("articles")
-            .update({ summary, topic_tags: tags, key_entities: entities, entities_extracted_at: new Date().toISOString() })
+            .update({ summary, topic_tags: tags, key_entities: entities, entity_types: entityTypes, entities_extracted_at: new Date().toISOString() })
             .eq("id", (article as any).id);
 
           if (updateErr) {
@@ -1311,26 +1324,24 @@ async function handleEnrichImages(): Promise<Response> {
 // political articles that were summarised before entity extraction shipped.
 // Rate-limit-aware, same pacing as summarise. Safe to re-run.
 
-async function extractEntitiesOnly(headline: string, summary: string): Promise<string[]> {
-  const prompt = `From this Indian news headline and summary, list 2–6 canonical entities the story is ABOUT — the specific people, organisations, places, policies, schemes, or events (not passing mentions). Use consistent canonical forms (e.g. "BJP" not "Bharatiya Janata Party", "E20 ethanol" not "20% ethanol blend"). Keep proper capitalisation.
+async function extractEntitiesOnly(
+  headline: string,
+  summary: string
+): Promise<{ entities: string[]; entityTypes: Record<string, string> }> {
+  const prompt = `From this Indian news headline and summary, list 2–6 canonical entities the story is ABOUT (not passing mentions), each with a type from: person, org, place, party, policy, scheme, event, case, bill, project, controversy. Use consistent canonical forms (e.g. "BJP" not "Bharatiya Janata Party", "E20 ethanol" not "20% ethanol blend"). Keep proper capitalisation.
 
-Return ONLY valid JSON: {"entities": ["E20 ethanol", "Nitin Gadkari"]}
+Return ONLY valid JSON: {"entities": [{"name": "E20 ethanol", "type": "policy"}, {"name": "Nitin Gadkari", "type": "person"}]}
 
 Headline: ${headline}
 Summary: ${summary}`;
 
   let raw = "";
-  if (GROQ_API_KEY) raw = await groqJson(prompt, 120);
-  else raw = await geminiJson(prompt, 120);
+  if (GROQ_API_KEY) raw = await groqJson(prompt, 160);
+  else raw = await geminiJson(prompt, 160);
   try {
     const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
-    return Array.isArray(parsed.entities)
-      ? parsed.entities
-          .filter((e: unknown) => typeof e === "string" && e.trim().length > 1 && e.trim().length < 60)
-          .map((e: string) => e.trim())
-          .slice(0, 6)
-      : [];
-  } catch { return []; }
+    return parseEntityList(parsed.entities);
+  } catch { return { entities: [], entityTypes: {} }; }
 }
 
 async function handleBackfillEntities(): Promise<Response> {
@@ -1361,10 +1372,10 @@ async function handleBackfillEntities(): Promise<Response> {
     for (const a of articles as any[]) {
       results.processed++;
       try {
-        const entities = await extractEntitiesOnly(a.headline, a.summary);
+        const { entities, entityTypes } = await extractEntitiesOnly(a.headline, a.summary);
         const { error: uErr } = await supabase
           .from("articles")
-          .update({ key_entities: entities, entities_extracted_at: new Date().toISOString() })
+          .update({ key_entities: entities, entity_types: entityTypes, entities_extracted_at: new Date().toISOString() })
           .eq("id", a.id);
         if (uErr) { console.error("entity backfill update error:", uErr); results.errors++; }
         else results.updated++;
@@ -1401,18 +1412,62 @@ async function handleBackfillEntities(): Promise<Response> {
 const THREAD_WINDOW_DAYS  = parseInt(Deno.env.get("THREAD_WINDOW_DAYS")  ?? "14");
 const THREAD_MIN_DAYS     = parseInt(Deno.env.get("THREAD_MIN_DAYS")     ?? "3");
 const THREAD_MIN_ARTICLES = parseInt(Deno.env.get("THREAD_MIN_ARTICLES") ?? "5");
+const THREAD_MIN_SOURCES  = parseInt(Deno.env.get("THREAD_MIN_SOURCES")  ?? "3");
+// An entity present in more than this share of the corpus is a participant,
+// not an issue (measured: Gadkari 21%, India 13% vs E20 8.9%).
+const THREAD_MAX_DF = parseFloat(Deno.env.get("THREAD_MAX_DF") ?? "0.12");
+
+// Structurally generic entities — never anchors (still allowed as related).
+// Lowercased; matched against normalized keys.
+const ANCHOR_STOPLIST = new Set([
+  "india", "bharat", "us", "usa", "united states", "china", "pakistan", "russia",
+  "centre", "center", "central government", "indian government", "government of india",
+  "government", "state government", "parliament", "lok sabha", "rajya sabha",
+  "supreme court", "high court", "election commission",
+  "bjp", "congress", "aap", "trinamool congress", "tmc", "nda", "india bloc",
+  "delhi", "new delhi", "mumbai", "bengaluru", "kolkata", "chennai", "hyderabad", "pune",
+  "uttar pradesh", "maharashtra", "west bengal", "tamil nadu", "karnataka", "kerala",
+  "gujarat", "rajasthan", "bihar", "madhya pradesh", "punjab", "haryana", "odisha",
+  "jammu and kashmir", "assam", "telangana", "andhra pradesh",
+]);
+
+// Indian-news synonym folding applied inside normalization
+const ENTITY_SYNONYMS: [RegExp, string][] = [
+  [/\bmandir\b/g, "temple"],
+  [/\bgovt\b/g, "government"],
+  [/\bshri\b/g, ""],
+];
+
+// Entity types that may anchor a thread (when typed data is available).
+// Issues are things that happen or get decided — never people/places/orgs.
+const ANCHOR_TYPES = new Set(["policy", "event", "scheme", "case", "bill", "project", "controversy"]);
+
+/** Normalize an entity to a grouping key. Display form is chosen separately. */
+function normalizeEntity(e: string): string {
+  let k = e.toLowerCase().trim();
+  k = k.replace(/\s*\([^)]*\)\s*/g, " ");      // strip parentheticals: "SIR (electoral rolls)"
+  k = k.replace(/['’]s\b/g, "");                // possessives
+  for (const [re, sub] of ENTITY_SYNONYMS) k = k.replace(re, sub);
+  k = k.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  return k;
+}
+
+function tokens(k: string): Set<string> {
+  return new Set(k.split(" ").filter((t) => t.length > 2));
+}
 
 async function handleDetectThreads(): Promise<Response> {
-  const results = { candidates: 0, threads_upserted: 0, articles_linked: 0, errors: 0 };
+  const results = {
+    corpus: 0, candidates: 0, stoplisted: 0, too_generic: 0,
+    alias_merges: 0, threads_upserted: 0, articles_linked: 0, errors: 0,
+  };
 
   try {
     const sinceIso = new Date(Date.now() - THREAD_WINDOW_DAYS * 864e5).toISOString();
 
-    // Pull recent political articles that have entities. Page through in case
-    // there are many — but political + windowed keeps this small.
     const { data: articles, error } = await supabase
       .from("articles")
-      .select("id, source_id, published_at, ingested_at, key_entities")
+      .select("id, source_id, published_at, ingested_at, key_entities, entity_types")
       .overlaps("topic_tags", POLITICAL_TAGS)
       .not("key_entities", "is", null)
       .gte("ingested_at", sinceIso)
@@ -1423,77 +1478,144 @@ async function handleDetectThreads(): Promise<Response> {
     if (!articles?.length) {
       return Response.json({ message: "No recent political articles with entities", results });
     }
+    results.corpus = articles.length;
 
-    // entity -> { articleIds:Set, days:Set, sources:Set }
-    const idx = new Map<string, { arts: Set<string>; days: Set<string>; srcs: Set<string> }>();
-    const artEntities = new Map<string, string[]>();
+    // ── Build normalized entity index ──
+    // key -> stats + surface-form counts + type votes
+    interface Ent { arts: Set<string>; days: Set<string>; srcs: Set<string>; forms: Map<string, number>; types: Map<string, number>; }
+    const idx = new Map<string, Ent>();
+    const artKeys = new Map<string, Set<string>>();
     const artDate = new Map<string, string>();
+    const artSrc = new Map<string, string>();
 
     for (const a of articles as any[]) {
       const ents: string[] = Array.isArray(a.key_entities) ? a.key_entities : [];
       if (!ents.length) continue;
       const day = (a.published_at ?? a.ingested_at ?? "").slice(0, 10);
-      artEntities.set(a.id, ents);
       artDate.set(a.id, a.published_at ?? a.ingested_at);
+      artSrc.set(a.id, a.source_id);
+      const keys = new Set<string>();
       for (const e of ents) {
-        if (!idx.has(e)) idx.set(e, { arts: new Set(), days: new Set(), srcs: new Set() });
-        const r = idx.get(e)!;
+        const k = normalizeEntity(e);
+        if (!k) continue;
+        keys.add(k);
+        if (!idx.has(k)) idx.set(k, { arts: new Set(), days: new Set(), srcs: new Set(), forms: new Map(), types: new Map() });
+        const r = idx.get(k)!;
         r.arts.add(a.id);
         if (day) r.days.add(day);
         if (a.source_id) r.srcs.add(a.source_id);
+        r.forms.set(e, (r.forms.get(e) ?? 0) + 1);
+        const t = a.entity_types?.[e];
+        if (typeof t === "string") r.types.set(t, (r.types.get(t) ?? 0) + 1);
+      }
+      artKeys.set(a.id, keys);
+    }
+
+    // ── Alias merge: token-subset containment ──
+    // "ram temple" absorbs "ayodhya ram temple", "ram temple trust", etc.
+    // Merge child (superset key, fewer articles) into parent (subset key, more articles).
+    const keysBySize = [...idx.keys()].sort((a, b) => idx.get(b)!.arts.size - idx.get(a)!.arts.size);
+    const aliasOf = new Map<string, string>();
+    for (let i = 0; i < keysBySize.length; i++) {
+      const parent = keysBySize[i];
+      if (aliasOf.has(parent)) continue;
+      const pTok = tokens(parent);
+      if (pTok.size === 0) continue;
+      for (let j = i + 1; j < keysBySize.length; j++) {
+        const child = keysBySize[j];
+        if (aliasOf.has(child)) continue;
+        const cTok = tokens(child);
+        if (cTok.size <= pTok.size) continue; // child must be the longer/more-specific form
+        let contained = true;
+        for (const t of pTok) if (!cTok.has(t)) { contained = false; break; }
+        if (contained) {
+          aliasOf.set(child, parent);
+          const p = idx.get(parent)!, c = idx.get(child)!;
+          c.arts.forEach((x) => p.arts.add(x));
+          c.days.forEach((x) => p.days.add(x));
+          c.srcs.forEach((x) => p.srcs.add(x));
+          c.forms.forEach((n, f) => p.forms.set(f, (p.forms.get(f) ?? 0) + n));
+          c.types.forEach((n, t) => p.types.set(t, (p.types.get(t) ?? 0) + n));
+          results.alias_merges++;
+        }
+      }
+    }
+    for (const child of aliasOf.keys()) idx.delete(child);
+    // Remap per-article keys through aliases
+    for (const keys of artKeys.values()) {
+      for (const k of [...keys]) {
+        const root = aliasOf.get(k);
+        if (root) { keys.delete(k); keys.add(root); }
       }
     }
 
-    // Qualifying entities, ranked by article volume (greedy anchor order)
-    const qualifying = [...idx.entries()]
-      .filter(([, r]) => r.days.size >= THREAD_MIN_DAYS && r.arts.size >= THREAD_MIN_ARTICLES)
-      .sort((a, b) => b[1].arts.size - a[1].arts.size);
-
+    // ── Anchor eligibility ──
+    const corpusSize = results.corpus;
+    const qualifying: [string, Ent][] = [];
+    for (const [k, r] of idx.entries()) {
+      if (r.days.size < THREAD_MIN_DAYS || r.arts.size < THREAD_MIN_ARTICLES || r.srcs.size < THREAD_MIN_SOURCES) continue;
+      if (ANCHOR_STOPLIST.has(k)) { results.stoplisted++; continue; }
+      if (r.arts.size / corpusSize > THREAD_MAX_DF) { results.too_generic++; continue; }
+      // Typed data (accruing since v41): people/places/orgs can never anchor
+      if (r.types.size > 0) {
+        const topType = [...r.types.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        if (!ANCHOR_TYPES.has(topType)) continue;
+      }
+      qualifying.push([k, r]);
+    }
+    qualifying.sort((a, b) => (b[1].days.size * b[1].arts.size) - (a[1].days.size * a[1].arts.size));
     results.candidates = qualifying.length;
 
     const claimed = new Set<string>();
+    const runStart = new Date().toISOString();
 
-    for (const [anchor, r] of qualifying) {
-      // Only this anchor's still-unclaimed articles seed the thread
+    for (const [key, r] of qualifying) {
       const own = [...r.arts].filter((id) => !claimed.has(id));
-      if (own.length < THREAD_MIN_ARTICLES) continue; // absorbed by a bigger thread
+      if (own.length < THREAD_MIN_ARTICLES) continue;
+      const ownSrcs = new Set(own.map((id) => artSrc.get(id)).filter(Boolean));
+      if (ownSrcs.size < THREAD_MIN_SOURCES) continue;
 
-      // Related entities = those co-occurring in ≥30% of this thread's articles
+      // Display form = most frequent raw surface form
+      const display = [...r.forms.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? key;
+
+      // Related entities via co-occurrence ≥30% (display forms of their keys)
       const coCount = new Map<string, number>();
       for (const id of own) {
-        for (const e of artEntities.get(id) ?? []) {
-          if (e === anchor) continue;
-          coCount.set(e, (coCount.get(e) ?? 0) + 1);
+        for (const k2 of artKeys.get(id) ?? []) {
+          if (k2 === key) continue;
+          coCount.set(k2, (coCount.get(k2) ?? 0) + 1);
         }
       }
       const related = [...coCount.entries()]
         .filter(([, c]) => c >= own.length * 0.3)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6)
-        .map(([e]) => e);
+        .map(([k2]) => {
+          const f = idx.get(k2)?.forms;
+          return f ? [...f.entries()].sort((a, b) => b[1] - a[1])[0][0] : k2;
+        });
 
       const dates = own.map((id) => artDate.get(id)).filter(Boolean).sort();
-      const srcSet = new Set<string>();
-      for (const id of own) {
-        const sid = (articles as any[]).find((x) => x.id === id)?.source_id;
-        if (sid) srcSet.add(sid);
-      }
+      const last = dates[dates.length - 1] ?? null;
+      // Lifecycle from recency of coverage
+      const ageDays = last ? (Date.now() - new Date(last).getTime()) / 864e5 : 99;
+      const status = ageDays <= 3 ? "developing" : ageDays <= 7 ? "steady" : "dormant";
 
       try {
-        // Upsert thread keyed by anchor_entity (stable across runs)
         const { data: thread, error: tErr } = await supabase
           .from("threads")
           .upsert({
-            anchor_entity: anchor,
-            title: anchor,
-            key_entities: [anchor, ...related],
+            anchor_key: key,
+            anchor_entity: display,
+            title: display,
+            key_entities: [display, ...related],
             article_count: own.length,
-            source_count: srcSet.size,
+            source_count: ownSrcs.size,
             first_seen: dates[0] ?? null,
-            last_article_at: dates[dates.length - 1] ?? null,
-            status: "developing",
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "anchor_entity" })
+            last_article_at: last,
+            status,
+            updated_at: runStart,
+          }, { onConflict: "anchor_key" })
           .select("id")
           .single();
 
@@ -1509,10 +1631,13 @@ async function handleDetectThreads(): Promise<Response> {
 
         own.forEach((id) => claimed.add(id));
       } catch (e) {
-        console.error(`[threads] anchor "${anchor}" error:`, e);
+        console.error(`[threads] anchor "${key}" error:`, e);
         results.errors++;
       }
     }
+
+    // Threads not refreshed this run have aged out of the window → dormant
+    await supabase.from("threads").update({ status: "dormant" }).lt("updated_at", runStart);
   } catch (err) {
     console.error("Fatal detect-threads error:", err);
     return Response.json({ error: String(err), results }, { status: 500 });
@@ -1535,6 +1660,7 @@ Deno.serve(async (req) => {
   if (phase === "profile-sources")  return handleProfileSources();
   if (phase === "analyze-clusters") return handleAnalyzeClusters();
   if (phase === "enrich-images")    return handleEnrichImages();
+  if (phase === "backfill-entities") return handleBackfillEntities();
   if (phase === "detect-threads")   return handleDetectThreads();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });

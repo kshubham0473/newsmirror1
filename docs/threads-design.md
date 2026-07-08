@@ -85,7 +85,43 @@ Groq 70B, descriptive-only prompt.
 Phase 1 (entity extraction) — cheapest, lowest-risk, and it advances TWO moats at once
 (Threads foundation + entity-level affinity for the interest algorithm).
 
+## Detection v2 — failure modes found in first real run (7 Jul) and fixes
+
+First run produced 24 threads; real issues (E20, Iran ceasefire, Mamata/EC) were present
+but drowned. Measured failure modes and the shipped fixes:
+
+1. **Generic anchors** — "Nitin Gadkari" (21.2% of corpus!), "India" (13.1%), "BJP",
+   "Mumbai" anchored junk mega-threads; Gadkari swallowed 222 articles incl. all of E20.
+   Fix: DF ceiling (anchor must appear in <12% of window corpus, env `THREAD_MAX_DF`)
+   + hard stoplist of structurally generic entities (countries/states/metros/parties/
+   institutions). Both only block ANCHORING — generics remain as related entities.
+2. **Alias fragmentation** — Ram Mandir theft (a month-long issue) never became a
+   thread because its ~30 articles were split across 8+ variants ("Ram Temple",
+   "Ram mandir", "Ayodhya Ram Temple", "Ram Temple Trust", "Shri Ram Janmabhoomi…").
+   Fix: normalization layer in detection (case-fold, strip parentheticals/possessives,
+   mandir→temple synonym) + token-subset alias merge ("ram temple" absorbs
+   "ayodhya ram temple"). Lives in detection, not extraction → tunable forever
+   without re-spending API calls.
+3. **No source-diversity gate** — one outlet's drumbeat could form a "thread".
+   Fix: ≥3 sources required (`THREAD_MIN_SOURCES`).
+4. **No lifecycle** — threads never went quiet or revived.
+   Fix: developing (≤3d since last article) / steady (≤7d) / dormant; threads not
+   refreshed by a run are auto-dormant; upsert keys on normalized `anchor_key`
+   so revivals reattach instead of duplicating.
+5. **The durable fix: entity types** (accruing since v41+): extraction now returns
+   {name, type}; types stored in `articles.entity_types`. Once typed data dominates,
+   detection enforces: anchors must be policy/event/scheme/case/bill/project/
+   controversy — a person/place/org/party can never anchor an issue. This is the
+   principled answer to the Gadkari problem; thresholds are the interim answer.
+
+## Deferred detection upgrades (documented, deliberately not built — complexity budget)
+- Embedding-coherence score per thread (vectors already exist): catch wrong-merges,
+  flag low-coherence threads for review/split.
+- Cluster-chain signal: articles sharing a story_cluster must share a thread; issues
+  as chains of event-clusters.
+- Burstiness vs baseline DF (needs longer entity history than we have yet).
+- LLM adjudication of borderline anchor merges (only if heuristics plateau).
+
 ## Open questions for later
-- Thread detection precision (merge/split tuning) — will need calibration like clustering.
 - Cold start: threads need a few days of entity data; may seed 2–3 manually for demo.
-- Dormancy: when does a Thread go quiet vs closed?
+- When does a dormant Thread close permanently?
