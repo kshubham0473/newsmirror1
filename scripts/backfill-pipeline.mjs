@@ -129,5 +129,6 @@ if (only && want("backfill-entities")) await runPhase("backfill-entities", 80);
 if (only && want("type-entities"))     await runPhase("type-entities", 12);
 if (only && want("detect-threads"))    await runPhase("detect-threads", 1);
 if (only && want("curate-threads"))    await runPhase("curate-threads", 2);
+if (only && want("synthesize-threads")) await runPhase("synthesize-threads", 3);
 
 console.log("\nDone. Check counts with the SQL in docs/ops-runbook.md → Database health checks.");

@@ -128,5 +128,16 @@ export default async function FeedPage() {
     .slice(0, 12)
     .map(({ _score: _s, ...a }: any) => a);
 
-  return <FeedClient initialArticles={articles as any} topClusters={topClusters as any} />;
+  // 9. Top developing Thread (curated) — the rare in-feed doorway card
+  const { data: topThreads } = await supabase
+    .from("threads")
+    .select("id, title, anchor_entity, status, article_count, source_count, first_seen, last_article_at, synthesis, spectrum_spread")
+    .eq("status", "developing")
+    .not("curated_at", "is", null)
+    .not("synthesis", "is", null)
+    .order("article_count", { ascending: false })
+    .limit(1);
+  const topThread = topThreads?.[0] ?? null;
+
+  return <FeedClient initialArticles={articles as any} topClusters={topClusters as any} topThread={topThread as any} />;
 }

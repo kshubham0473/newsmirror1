@@ -1901,6 +1901,177 @@ ${listing}`;
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
+// ─── HANDLER: SYNTHESIZE THREADS ──────────────────────────────────────────────
+//
+// Phase 3: the living brief. For each curated active thread whose coverage has
+// moved since its last synthesis, ONE Groq-70B call produces:
+//   - "where it stands" (descriptive, ~100 words)
+//   - "the sides" (how outlet groups frame it — cited, never adjudicated)
+//   - new time-spine beats since the last synthesis
+// Also computes spectrum_spread (source ideology positions) — no LLM needed.
+// ~4–6 calls/day at current thread counts.
+
+async function handleSynthesizeThreads(): Promise<Response> {
+  const MAX_THREADS = 6;
+  const results = { examined: 0, synthesized: 0, beats_added: 0, skipped_fresh: 0, errors: 0, rate_limited: false };
+
+  try {
+    const { data: threads, error } = await supabase
+      .from("threads")
+      .select("id, title, anchor_entity, key_entities, article_count, first_seen, last_article_at, synthesis, synthesis_updated_at")
+      .in("status", ["developing", "steady"])
+      .not("curated_at", "is", null)
+      .order("last_article_at", { ascending: false })
+      .limit(MAX_THREADS * 2);
+
+    if (error) throw error;
+    if (!threads?.length) return Response.json({ message: "No active curated threads", results });
+
+    // Source ideology lookup for spectrum spread
+    const { data: sis } = await supabase
+      .from("source_ideology_scores")
+      .select("source_id, identity_score, state_trust_score, economic_score, institution_score");
+    const srcPos = new Map<string, number>();
+    for (const r of (sis ?? []) as any[]) {
+      const vals = [r.identity_score, r.state_trust_score, r.economic_score, r.institution_score]
+        .filter((v: any) => typeof v === "number" && v > 0);
+      if (vals.length) srcPos.set(r.source_id, vals.reduce((s: number, v: number) => s + v, 0) / vals.length);
+    }
+
+    let processed = 0;
+    for (const t of threads as any[]) {
+      if (processed >= MAX_THREADS) break;
+      results.examined++;
+
+      // Skip if nothing new since last synthesis
+      if (t.synthesis_updated_at && t.last_article_at && t.synthesis_updated_at >= t.last_article_at) {
+        results.skipped_fresh++;
+        continue;
+      }
+      processed++;
+
+      try {
+        // Thread articles with source + date, newest first
+        const { data: links } = await supabase
+          .from("thread_articles")
+          .select("articles(id, headline, summary, published_at, ingested_at, source_id, sources(name))")
+          .eq("thread_id", t.id)
+          .limit(60);
+        const arts = ((links ?? []) as any[])
+          .map((l) => l.articles).filter((a) => a?.summary)
+          .sort((a, b) => (b.published_at ?? b.ingested_at ?? "").localeCompare(a.published_at ?? a.ingested_at ?? ""));
+        if (arts.length < 3) continue;
+
+        // Spectrum spread: distinct source positions (no LLM)
+        const spreadSet = new Map<string, number>();
+        for (const a of arts) {
+          const p = srcPos.get(a.source_id);
+          if (typeof p === "number") spreadSet.set(a.source_id, p);
+        }
+        const spectrum_spread = [...spreadSet.values()].sort((a, b) => a - b).map((v) => Math.round(v * 100) / 100);
+
+        // Existing beats (avoid duplicates)
+        const { data: beats } = await supabase
+          .from("thread_beats")
+          .select("beat_date, headline")
+          .eq("thread_id", t.id)
+          .order("beat_date", { ascending: false })
+          .limit(15);
+        const existingBeats = ((beats ?? []) as any[])
+          .map((b) => `${b.beat_date}: ${b.headline}`).join("\n") || "(none yet)";
+
+        const artBlock = arts.slice(0, 35).map((a) => {
+          const d = (a.published_at ?? a.ingested_at ?? "").slice(0, 10);
+          return `[${d}] ${a.sources?.name ?? "?"}: "${a.headline}" — ${String(a.summary).slice(0, 180)}`;
+        }).join("\n");
+
+        const prompt = `You maintain a strictly NEUTRAL, DESCRIPTIVE brief on an ongoing Indian news issue for a perspective-comparison app. You NEVER take a side, judge who is right, or use loaded language. You describe what happened and how different outlets frame it.
+
+ISSUE: ${t.title}
+Coverage: ${arts.length} articles, ${t.first_seen?.slice(0, 10)} → ${t.last_article_at?.slice(0, 10)}
+
+PREVIOUS SYNTHESIS (may be outdated):
+${t.synthesis ? JSON.stringify(t.synthesis).slice(0, 900) : "(first synthesis)"}
+
+EXISTING TIMELINE BEATS (do NOT repeat these):
+${existingBeats}
+
+ARTICLES (newest first, with source and date):
+${artBlock}
+
+Produce ONLY valid JSON:
+{
+  "where_it_stands": "90-120 words: what has factually happened and where the issue currently stands. Neutral prose, no opinions, no 'should'.",
+  "sides": [
+    {"label": "3-6 word framing label", "outlets": ["exact outlet names"], "emphasis": "one sentence: what this group's coverage emphasises"}
+  ],
+  "new_beats": [
+    {"date": "YYYY-MM-DD", "headline": "short factual milestone headline", "what_happened": "1-2 sentences, factual"}
+  ]
+}
+
+Rules: 2-3 sides max, grouped by genuinely different framing (cite only outlets present above). new_beats = significant developments NOT already in the existing beats, one per date at most, oldest allowed date ${t.first_seen?.slice(0, 10)}. If nothing genuinely new, new_beats may be empty.`;
+
+        let raw = "";
+        try {
+          raw = GROQ_API_KEY ? await groqJson(prompt, 900, GROQ_MODEL_SMART) : await geminiJson(prompt, 900);
+        } catch (e) {
+          const m = String(e);
+          results.errors++;
+          if (m.includes("429") || m.toLowerCase().includes("rate")) { results.rate_limited = true; break; }
+          continue;
+        }
+
+        const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+        const synthesis = {
+          where_it_stands: typeof parsed.where_it_stands === "string" ? parsed.where_it_stands.trim() : null,
+          sides: Array.isArray(parsed.sides)
+            ? parsed.sides.slice(0, 3).map((s: any) => ({
+                label: String(s.label ?? "").slice(0, 60),
+                outlets: Array.isArray(s.outlets) ? s.outlets.slice(0, 6).map((o: any) => String(o)) : [],
+                emphasis: String(s.emphasis ?? "").slice(0, 240),
+              }))
+            : [],
+        };
+        if (!synthesis.where_it_stands) { results.errors++; continue; }
+
+        const now = new Date().toISOString();
+        const { error: uErr } = await supabase.from("threads").update({
+          synthesis, spectrum_spread, synthesis_updated_at: now, updated_at: now,
+        }).eq("id", t.id);
+        if (uErr) { console.error("[synthesize] update error:", uErr); results.errors++; continue; }
+        results.synthesized++;
+
+        const newBeats = (Array.isArray(parsed.new_beats) ? parsed.new_beats : [])
+          .filter((b: any) => typeof b.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.date) && typeof b.headline === "string")
+          .slice(0, 8)
+          .map((b: any) => ({
+            thread_id: t.id,
+            beat_date: b.date,
+            headline: String(b.headline).slice(0, 160),
+            what_happened: typeof b.what_happened === "string" ? b.what_happened.slice(0, 400) : null,
+          }));
+        if (newBeats.length) {
+          const { error: bErr } = await supabase
+            .from("thread_beats")
+            .upsert(newBeats, { onConflict: "thread_id,beat_date,headline", ignoreDuplicates: true });
+          if (bErr) console.error("[synthesize] beats error:", bErr);
+          else results.beats_added += newBeats.length;
+        }
+      } catch (e) {
+        console.error(`[synthesize] thread "${t.title}" error:`, String(e).slice(0, 200));
+        results.errors++;
+      }
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+  } catch (err) {
+    console.error("Fatal synthesize-threads error:", err);
+    return Response.json({ error: String(err), results }, { status: 500 });
+  }
+
+  return Response.json({ results, timestamp: new Date().toISOString() });
+}
+
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -1919,6 +2090,7 @@ Deno.serve(async (req) => {
   if (phase === "type-entities")    return handleTypeEntities();
   if (phase === "detect-threads")   return handleDetectThreads();
   if (phase === "curate-threads")   return handleCurateThreads();
+  if (phase === "synthesize-threads") return handleSynthesizeThreads();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });

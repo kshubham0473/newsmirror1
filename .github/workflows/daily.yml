@@ -50,6 +50,56 @@ jobs:
             exit 1
           fi
 
+      # ── Threads pipeline: detect (free heuristics) → curate (1 LLM call) →
+      #    synthesize (living briefs + time-spine beats). 60s gaps let the
+      #    Groq 70B token window refill between judgment calls.
+      - name: Detect threads
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/detect_response.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=detect-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/detect_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::detect-threads phase returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Curate threads
+        run: |
+          sleep 60
+          HTTP_STATUS=$(curl -s -o /tmp/curate_response.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=curate-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/curate_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::curate-threads phase returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Synthesize threads
+        run: |
+          sleep 60
+          HTTP_STATUS=$(curl -s -o /tmp/synth_response.json -w "%{http_code}" -X POST \
+            --max-time 150 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=synthesize-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/synth_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::synthesize-threads phase returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
       - name: Alert on failure
         if: failure()
         uses: actions/github-script@v7

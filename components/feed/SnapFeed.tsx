@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
 import FlipCard, { type ArticleWithFraming } from "./FlipCard";
 import NudgeCard from "./NudgeCard";
+import ThreadFeedCard, { type FeedThread } from "./ThreadFeedCard";
 import type { Nudge } from "@/lib/useNudge";
 import { decodeEntities } from "@/lib/decodeEntities";
 import { recordSignal, SIGNAL } from "@/lib/affinity";
@@ -53,11 +54,13 @@ type Slot =
   | { kind: "story"; article: ArticleWithFraming; position: number }
   | { kind: "digest"; briefs: ArticleWithFraming[]; index: number }
   | { kind: "nudge" }
+  | { kind: "thread" }
   | { kind: "end" };
 
-const NUDGE_SLOT = 5; // zero-based: after 4 stories + 1 digest
+const THREAD_SLOT = 3; // zero-based: early — the doorway into the developing issue
+const NUDGE_SLOT = 6;  // after the thread card + first digest
 
-function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean): Slot[] {
+function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean, hasThread: boolean): Slot[] {
   const slots: Slot[] = [];
   let i = 0;
   let position = 0;
@@ -73,6 +76,9 @@ function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean): Slot[] {
       slots.push({ kind: "digest", briefs, index: digestIndex++ });
     }
   }
+  if (hasThread) {
+    slots.splice(Math.min(THREAD_SLOT, slots.length), 0, { kind: "thread" });
+  }
   if (hasNudge) {
     slots.splice(Math.min(NUDGE_SLOT, slots.length), 0, { kind: "nudge" });
   }
@@ -85,11 +91,13 @@ interface Props {
   user?: User | null;
   /** Armed nudge from useNudge — rendered as a special card in the flow */
   nudge?: Nudge | null;
+  /** Top developing Thread — the rare in-feed doorway card */
+  thread?: FeedThread | null;
   /** Called with the number of screens advanced this session (feeds the blot) */
   onAdvance?: (count: number) => void;
 }
 
-export default function SnapFeed({ articles, user = null, nudge = null, onAdvance }: Props) {
+export default function SnapFeed({ articles, user = null, nudge = null, thread = null, onAdvance }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0.04);
   const [readCount, setReadCount] = useState(0);
@@ -98,8 +106,8 @@ export default function SnapFeed({ articles, user = null, nudge = null, onAdvanc
   // Exclude the nudge's article from regular slots so it doesn't appear twice
   const slots = useMemo(() => {
     const pool = nudge ? articles.filter((a) => a.id !== nudge.article.id) : articles;
-    return buildSlots(pool, !!nudge);
-  }, [articles, nudge]);
+    return buildSlots(pool, !!nudge, !!thread);
+  }, [articles, nudge, thread]);
 
   // Observe which slot is snapped → reveal animations, seen-marking, dwell tracking
   useEffect(() => {
@@ -190,6 +198,13 @@ export default function SnapFeed({ articles, user = null, nudge = null, onAdvanc
             return (
               <section className={styles.snap} key="nudge">
                 <NudgeCard nudge={nudge} user={user} />
+              </section>
+            );
+          }
+          if (slot.kind === "thread" && thread) {
+            return (
+              <section className={styles.snap} key="thread">
+                <ThreadFeedCard thread={thread} />
               </section>
             );
           }

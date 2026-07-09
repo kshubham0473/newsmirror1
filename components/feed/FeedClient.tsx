@@ -12,6 +12,7 @@ import { getAffinity, topTopics } from "@/lib/affinity";
 import ArticleCard from "./ArticleCard";
 import SnapFeed from "./SnapFeed";
 import BlotGlyph from "./BlotGlyph";
+import type { FeedThread } from "./ThreadFeedCard";
 import Onboarding from "@/components/ui/Onboarding";
 import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
@@ -44,6 +45,7 @@ interface ClusterStory {
 interface Props {
   initialArticles: Article[];
   topClusters?: ClusterStory[];
+  topThread?: FeedThread | null;
 }
 
 type ViewMode = "cards" | "list";
@@ -101,7 +103,7 @@ function orderFeed(
   return result;
 }
 
-export default function FeedClient({ initialArticles, topClusters = [] }: Props) {
+export default function FeedClient({ initialArticles, topClusters = [], topThread = null }: Props) {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
@@ -217,6 +219,15 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
         <div className={styles.wordmark}>News<span>Mirror</span></div>
         <div className={styles.topbarRight}>
           <BlotGlyph count={advanceCount} />
+          <Link href="/threads" className={styles.iconBtn} aria-label="Developing threads" prefetch>
+            {/* time-spine glyph: a line of story-beats */}
+            <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2v14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <circle cx="9" cy="4.5" r="2" fill="currentColor"/>
+              <circle cx="9" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="9" cy="14" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+          </Link>
           <button
             className={`${styles.iconBtn} ${sourceFilterOpen ? styles.iconBtnActive : ""}`}
             onClick={() => setSourceFilterOpen((v) => !v)}
@@ -352,7 +363,7 @@ export default function FeedClient({ initialArticles, topClusters = [] }: Props)
           <div className={styles.skelCard} />
         </div>
       ) : viewMode === "cards" ? (
-        <SnapFeed articles={displayArticles} user={user} nudge={nudge} onAdvance={setAdvanceCount} />
+        <SnapFeed articles={displayArticles} user={user} nudge={nudge} thread={topThread} onAdvance={setAdvanceCount} />
       ) : (
         <main className={styles.listMain}>
           {displayArticles.length === 0 ? (
