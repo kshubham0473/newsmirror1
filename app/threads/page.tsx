@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Link from "next/link";
-import { createServerClient } from "@/lib/supabase-server";
+import { createStaticClient } from "@/lib/supabase-static";
 import styles from "./threads.module.css";
 
 export const revalidate = 300;
@@ -30,7 +30,7 @@ function spreadWidth(spread: number[] | null): string {
 }
 
 export default async function ThreadsPage() {
-  const supabase = createServerClient();
+  const supabase = createStaticClient();
 
   const { data: threads, error } = await supabase
     .from("threads")

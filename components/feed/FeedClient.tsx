@@ -46,6 +46,7 @@ interface Props {
   initialArticles: Article[];
   topClusters?: ClusterStory[];
   topThread?: FeedThread | null;
+  threadsStrip?: FeedThread[];
 }
 
 type ViewMode = "cards" | "list";
@@ -103,7 +104,7 @@ function orderFeed(
   return result;
 }
 
-export default function FeedClient({ initialArticles, topClusters = [], topThread = null }: Props) {
+export default function FeedClient({ initialArticles, topClusters = [], topThread = null, threadsStrip = [] }: Props) {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
@@ -300,6 +301,23 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
             ))}
           </div>
         </>
+      )}
+
+      {/* ── Developing strip — Threads at reading-flow level (cards mode) ── */}
+      {viewMode === "cards" && threadsStrip.length > 0 && (
+        <div className={styles.devStrip}>
+          <Link href="/threads" className={styles.devStripLabel} prefetch>
+            <span className={styles.devDot} />Developing
+          </Link>
+          <div className={styles.devStripScroll}>
+            {threadsStrip.map((t) => (
+              <Link key={t.id} href={`/threads/${t.id}`} className={styles.devChip} prefetch>
+                {t.title ?? t.anchor_entity}
+                <span className={styles.devChipDay}>d{Math.max(1, Math.round((new Date(t.last_article_at ?? Date.now()).getTime() - new Date(t.first_seen ?? Date.now()).getTime()) / 864e5) + 1)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ── Topic pill bar — list mode only; cards mode filters live in the sheet ── */}

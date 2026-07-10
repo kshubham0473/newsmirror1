@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createServerClient } from "@/lib/supabase-server";
+import { createStaticClient } from "@/lib/supabase-static";
 import styles from "./thread.module.css";
 
 export const revalidate = 300;
@@ -30,7 +30,7 @@ function timeAgo(dateStr?: string | null): string {
 }
 
 export default async function ThreadPage({ params }: { params: { id: string } }) {
-  const supabase = createServerClient();
+  const supabase = createStaticClient();
 
   const { data: thread } = await supabase
     .from("threads")

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createServerClient } from "@/lib/supabase-server";
+import { createStaticClient } from "@/lib/supabase-static";
 import FeedClient from "@/components/feed/FeedClient";
 
 export const revalidate = 60;
@@ -10,7 +10,7 @@ const MAX_PER_SOURCE = 12;
 const FETCH_LIMIT = 200;
 
 export default async function FeedPage() {
-  const supabase = createServerClient();
+  const supabase = createStaticClient();
 
   // 1. Fetch a wider pool of recent articles (with framing data from story_clusters)
   const { data, error } = await supabase
@@ -78,6 +78,28 @@ export default async function FeedPage() {
     };
   });
 
+  // 4b. Cluster peers — how OTHER outlets headlined the same story.
+  //     Powers the flip for every multi-outlet card, even before the LLM
+  //     framing analysis reaches that cluster.
+  const byCluster = new Map<string, any[]>();
+  for (const a of withCluster) {
+    if (!a.cluster_id) continue;
+    if (!byCluster.has(a.cluster_id)) byCluster.set(a.cluster_id, []);
+    byCluster.get(a.cluster_id)!.push(a);
+  }
+  for (const a of withCluster) {
+    if (!a.cluster_id || (a.cluster_source_count ?? 0) < 2) continue;
+    const seenSrc = new Set<string>([a.source_id]);
+    a.cluster_peers = (byCluster.get(a.cluster_id) ?? [])
+      .filter((p: any) => {
+        if (p.id === a.id || seenSrc.has(p.source_id)) return false;
+        seenSrc.add(p.source_id);
+        return true;
+      })
+      .slice(0, 4)
+      .map((p: any) => ({ source: p.sources?.name ?? "—", headline: p.headline }));
+  }
+
   // 5. Source cap — max MAX_PER_SOURCE per source before scoring
   const sourceSeen: Record<string, number> = {};
   const capped = withCluster.filter((a: any) => {
@@ -128,16 +150,23 @@ export default async function FeedPage() {
     .slice(0, 12)
     .map(({ _score: _s, ...a }: any) => a);
 
-  // 9. Top developing Thread (curated) — the rare in-feed doorway card
+  // 9. Developing Threads (curated) — the masthead strip + in-feed doorway card
   const { data: topThreads } = await supabase
     .from("threads")
     .select("id, title, anchor_entity, status, article_count, source_count, first_seen, last_article_at, synthesis, spectrum_spread")
-    .eq("status", "developing")
+    .in("status", ["developing", "steady"])
     .not("curated_at", "is", null)
-    .not("synthesis", "is", null)
-    .order("article_count", { ascending: false })
-    .limit(1);
-  const topThread = topThreads?.[0] ?? null;
+    .order("last_article_at", { ascending: false })
+    .limit(5);
+  const threadsList = topThreads ?? [];
+  const topThread = threadsList.find((t: any) => t.status === "developing" && t.synthesis) ?? null;
 
-  return <FeedClient initialArticles={articles as any} topClusters={topClusters as any} topThread={topThread as any} />;
+  return (
+    <FeedClient
+      initialArticles={articles as any}
+      topClusters={topClusters as any}
+      topThread={topThread as any}
+      threadsStrip={threadsList as any}
+    />
+  );
 }

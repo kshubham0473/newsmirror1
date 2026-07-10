@@ -1,0 +1,45 @@
+name: NewsMirror threads refresh
+
+# Midday + evening refreshes so hot stories (wars, verdicts) become Threads
+# the same day instead of waiting for the 2AM daily run.
+on:
+  schedule:
+    - cron: '30 8 * * *'    # 2 PM IST
+    - cron: '30 14 * * *'   # 8 PM IST
+  workflow_dispatch:
+
+jobs:
+  threads:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect threads
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/detect.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=detect-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" --data '{}')
+          echo "HTTP $HTTP_STATUS"; cat /tmp/detect.json
+          [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ] || exit 1
+
+      - name: Curate threads
+        run: |
+          sleep 60
+          HTTP_STATUS=$(curl -s -o /tmp/curate.json -w "%{http_code}" -X POST \
+            --max-time 120 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=curate-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" --data '{}')
+          echo "HTTP $HTTP_STATUS"; cat /tmp/curate.json
+          [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ] || exit 1
+
+      - name: Synthesize threads
+        run: |
+          sleep 60
+          HTTP_STATUS=$(curl -s -o /tmp/synth.json -w "%{http_code}" -X POST \
+            --max-time 150 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=synthesize-threads" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" --data '{}')
+          echo "HTTP $HTTP_STATUS"; cat /tmp/synth.json
+          [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ] || exit 1

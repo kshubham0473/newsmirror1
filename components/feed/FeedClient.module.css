@@ -507,3 +507,63 @@
   gap: 6px;
   padding: 0 12px 4px;
 }
+
+/* ── Developing strip: Threads in the reading flow ── */
+.devStrip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 18px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.devStripLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #e8a265;
+  text-decoration: none;
+  flex: none;
+}
+.devDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e8a265;
+  animation: devPulse 2s ease-in-out infinite;
+}
+@keyframes devPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.devStripScroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.devStripScroll::-webkit-scrollbar { display: none; }
+.devChip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 4px 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.devChipDay {
+  font-family: var(--font-ui);
+  font-size: 0.56rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}

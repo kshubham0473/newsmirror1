@@ -285,11 +285,12 @@ TAGS rules — 1 to 3 tags from exactly this list: ${TOPIC_LIST.join(", ")}
 
 ENTITIES rules — 2 to 6 canonical entities this article is ABOUT (not passing mentions),
 each with a type from: person, org, place, party, policy, scheme, event, case, bill, project, controversy.
-Use the common canonical form and be consistent — always "BJP" not "Bharatiya Janata Party",
-always "E20 ethanol" not "20% ethanol blend". Keep proper capitalisation.
+Use the common canonical short form (acronym if widely used) and keep proper capitalisation.
+Extract entities ONLY from the article text below — never invent entities and never copy
+names from these instructions.
 
-Return ONLY valid JSON, no markdown fences, in this shape:
-{"summary": "…", "tags": ["politics", "economy"], "entities": [{"name": "E20 ethanol", "type": "policy"}, {"name": "Nitin Gadkari", "type": "person"}]}
+Return ONLY valid JSON, no markdown fences, in this shape (names here are placeholders):
+{"summary": "…", "tags": ["politics", "economy"], "entities": [{"name": "<policy name>", "type": "policy"}, {"name": "<person name>", "type": "person"}]}
 
 Headline: ${headline}
 
@@ -1328,9 +1329,9 @@ async function extractEntitiesOnly(
   headline: string,
   summary: string
 ): Promise<{ entities: string[]; entityTypes: Record<string, string> }> {
-  const prompt = `From this Indian news headline and summary, list 2–6 canonical entities the story is ABOUT (not passing mentions), each with a type from: person, org, place, party, policy, scheme, event, case, bill, project, controversy. Use consistent canonical forms (e.g. "BJP" not "Bharatiya Janata Party", "E20 ethanol" not "20% ethanol blend"). Keep proper capitalisation.
+  const prompt = `From this Indian news headline and summary, list 2–6 canonical entities the story is ABOUT (not passing mentions), each with a type from: person, org, place, party, policy, scheme, event, case, bill, project, controversy. Use the common canonical short form; keep proper capitalisation. Extract ONLY from the text below — never invent entities or copy names from these instructions.
 
-Return ONLY valid JSON: {"entities": [{"name": "E20 ethanol", "type": "policy"}, {"name": "Nitin Gadkari", "type": "person"}]}
+Return ONLY valid JSON (names are placeholders): {"entities": [{"name": "<policy name>", "type": "policy"}, {"name": "<person name>", "type": "person"}]}
 
 Headline: ${headline}
 Summary: ${summary}`;

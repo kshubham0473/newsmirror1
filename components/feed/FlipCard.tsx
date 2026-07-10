@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import type { Article } from "@/lib/types";
@@ -36,6 +36,7 @@ export type ArticleWithFraming = Article & {
   cluster_framing_insight?: string | null;
   cluster_divergence_score?: number | null;
   cluster_framing_groups?: FramingGroup[] | null;
+  cluster_peers?: { source: string; headline: string }[] | null;
 };
 
 interface Props {
@@ -86,15 +87,36 @@ export default function FlipCard({ article, position, user = null }: Props) {
   const insight = article.cluster_framing_insight ?? null;
   const divergence = article.cluster_divergence_score ?? 0;
   const groups = article.cluster_framing_groups ?? [];
+  const peers = article.cluster_peers ?? [];
   const sourceCount = article.cluster_source_count ?? 0;
-  const hasFlip = !!insight && divergence > 0.3 && groups.length >= 2;
+  // Rich flip: LLM framing analysis exists. Basic flip: we always have the
+  // other outlets' headlines for multi-outlet stories — the flip never dies.
+  const hasInsight = !!insight && divergence > 0.3 && groups.length >= 2;
+  const hasFlip = hasInsight || peers.length >= 1;
   const divergencePct = Math.round(divergence * 100);
-  const isHot = hasFlip && divergence >= 0.6;
+  const isHot = hasInsight && divergence >= 0.6;
 
   const pos = spectrumPosition(article);
 
+  // Swipe left/right = flip — the physical gesture for "the other side"
+  const touchRef = useRef({ x: 0, y: 0 });
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!hasFlip) return;
+    const dx = e.changedTouches[0].clientX - touchRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchRef.current.y;
+    if (Math.abs(dx) > 64 && Math.abs(dy) < 48) doFlip(!flipped);
+  };
+
   const card = (
-    <div className={`${styles.fcard} ${flipped ? styles.flipped : ""}`} style={{ ["--div" as string]: `${divergencePct}%` }}>
+    <div
+      className={`${styles.fcard} ${flipped ? styles.flipped : ""}`}
+      style={{ ["--div" as string]: `${divergencePct}%` }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
 
       {/* ── FRONT ── */}
       <div className={`${styles.face} ${styles.front} ${pastel}`}>
@@ -176,28 +198,43 @@ export default function FlipCard({ article, position, user = null }: Props) {
         <div className={`${styles.face} ${styles.back}`}>
           <div className={styles.bHead}>
             <div className={styles.bKick}>◑ The other side</div>
-            <h3 className={styles.bTitle}>Same story, <em>different frames</em></h3>
-            <p className={styles.bInsight}>{insight}</p>
+            {hasInsight ? (
+              <>
+                <h3 className={styles.bTitle}>Same story, <em>different frames</em></h3>
+                <p className={styles.bInsight}>{insight}</p>
+              </>
+            ) : (
+              <h3 className={styles.bTitle}>How others <em>headlined it</em></h3>
+            )}
           </div>
 
           <div className={styles.bFrames}>
-            {groups.map((g, i) => (
-              <div key={i} className={`${styles.bFrame} ${i % 2 === 0 ? styles.bWarm : styles.bCool}`}>
-                <div className={styles.bWho}>
-                  {g.outlets.join(" · ")}{g.slant ? ` · ${g.slant}` : ""}
-                </div>
-                <p className={styles.bHl}>&ldquo;{g.headline}&rdquo;</p>
-              </div>
-            ))}
+            {hasInsight
+              ? groups.map((g, i) => (
+                  <div key={i} className={`${styles.bFrame} ${i % 2 === 0 ? styles.bWarm : styles.bCool}`}>
+                    <div className={styles.bWho}>
+                      {g.outlets.join(" · ")}{g.slant ? ` · ${g.slant}` : ""}
+                    </div>
+                    <p className={styles.bHl}>&ldquo;{g.headline}&rdquo;</p>
+                  </div>
+                ))
+              : peers.map((p, i) => (
+                  <div key={i} className={`${styles.bFrame} ${i % 2 === 0 ? styles.bWarm : styles.bCool}`}>
+                    <div className={styles.bWho}>{p.source}</div>
+                    <p className={styles.bHl}>&ldquo;{decodeEntities(p.headline)}&rdquo;</p>
+                  </div>
+                ))}
           </div>
 
-          <div className={styles.bMeter}>
-            <div className={styles.bMeterLbl}>
-              <span>Framing divergence</span>
-              <b>{divergence >= 0.6 ? "High" : "Moderate"} · {divergencePct}%</b>
+          {hasInsight && (
+            <div className={styles.bMeter}>
+              <div className={styles.bMeterLbl}>
+                <span>Framing divergence</span>
+                <b>{divergence >= 0.6 ? "High" : "Moderate"} · {divergencePct}%</b>
+              </div>
+              <div className={styles.bTrack}><div className={styles.bFill} /></div>
             </div>
-            <div className={styles.bTrack}><div className={styles.bFill} /></div>
-          </div>
+          )}
 
           <div className={styles.bFoot}>
             <button className={styles.unflip} onClick={() => doFlip(false)}>↺ Back to story</button>

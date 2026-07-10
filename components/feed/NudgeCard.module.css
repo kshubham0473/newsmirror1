@@ -54,10 +54,8 @@
   line-height: 1.18;
   font-weight: 600;
   margin-top: 14px;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  /* no clamp — the card is full-height with room to spare; cutting text
+     while space sits empty below reads as a bug */
 }
 
 .meta {

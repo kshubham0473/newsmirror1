@@ -23,3 +23,21 @@ jobs:
             echo "::error::Cluster edge function returned HTTP $HTTP_STATUS"
             exit 1
           fi
+
+      # Framing analysis right after clustering (was daily-only, which starved
+      # flip cards of fresh insights — new clusters waited up to 24h)
+      - name: Analyse cluster framing
+        run: |
+          sleep 30
+          HTTP_STATUS=$(curl -s -o /tmp/analyze_response.json -w "%{http_code}" -X POST \
+            --max-time 150 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=analyze-clusters" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/analyze_response.json
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::analyze-clusters returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
