@@ -7,3 +7,5 @@ out/
 .DS_Store
 public/sw.js
 public/workbox-*.js
+
+tsconfig.tsbuildinfo

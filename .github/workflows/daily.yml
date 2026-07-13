@@ -16,6 +16,7 @@ jobs:
       # high-quality ideology profiles. Only political/policy articles are used —
       # sports and lifestyle are noise. Rotates through sources daily.
       - name: Profile sources
+        continue-on-error: true
         id: profile_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/profile_response.json -w "%{http_code}" -X POST \
@@ -35,6 +36,7 @@ jobs:
       # Detects when different outlets frame the same event in meaningfully
       # different ways (e.g. "Women reservation bill" vs "Delimitation bill").
       - name: Analyse cluster framing
+        continue-on-error: true
         id: analyze_call
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/analyze_response.json -w "%{http_code}" -X POST \

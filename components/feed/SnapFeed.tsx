@@ -95,13 +95,39 @@ interface Props {
   thread?: FeedThread | null;
   /** Called with the number of screens advanced this session (feeds the blot) */
   onAdvance?: (count: number) => void;
+  /** Pull-to-refresh handler (router.refresh from the parent) */
+  onRefresh?: () => void;
 }
 
-export default function SnapFeed({ articles, user = null, nudge = null, thread = null, onAdvance }: Props) {
+export default function SnapFeed({ articles, user = null, nudge = null, thread = null, onAdvance, onRefresh }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0.04);
   const [readCount, setReadCount] = useState(0);
   const seenIdx = useRef(new Set<number>());
+
+  // Pull-to-refresh: drag down from the top of the feed
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStart = useRef<number | null>(null);
+  const onFeedTouchStart = (e: React.TouchEvent) => {
+    if ((feedRef.current?.scrollTop ?? 1) <= 0) pullStart.current = e.touches[0].clientY;
+    else pullStart.current = null;
+  };
+  const onFeedTouchMove = (e: React.TouchEvent) => {
+    if (pullStart.current === null || refreshing) return;
+    const dy = e.touches[0].clientY - pullStart.current;
+    if (dy > 0 && (feedRef.current?.scrollTop ?? 1) <= 0) setPull(Math.min(90, dy * 0.5));
+  };
+  const onFeedTouchEnd = () => {
+    if (pull > 60 && onRefresh && !refreshing) {
+      setRefreshing(true);
+      onRefresh();
+      setTimeout(() => { setRefreshing(false); setPull(0); }, 1200);
+    } else {
+      setPull(0);
+    }
+    pullStart.current = null;
+  };
 
   // Exclude the nudge's article from regular slots so it doesn't appear twice
   const slots = useMemo(() => {
@@ -185,32 +211,56 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
         <i style={{ width: `${progress * 100}%` }} />
       </div>
 
-      <div className={styles.feed} ref={feedRef} onScroll={onScroll}>
+      {(pull > 0 || refreshing) && (
+        <div className={styles.pullHint} style={{ opacity: refreshing ? 1 : Math.min(1, pull / 60) }}>
+          {refreshing ? "Fetching fresh stories…" : pull > 60 ? "Release to refresh" : "Pull to refresh"}
+        </div>
+      )}
+
+      <div
+        className={styles.feed}
+        ref={feedRef}
+        onScroll={onScroll}
+        onTouchStart={onFeedTouchStart}
+        onTouchMove={onFeedTouchMove}
+        onTouchEnd={onFeedTouchEnd}
+        style={pull > 0 ? { transform: `translateY(${pull}px)`, transition: refreshing ? "transform .3s" : "none" } : undefined}
+      >
         {slots.map((slot, i) => {
+          // slotInner wrapper is REQUIRED: the snap-settle animation puts a
+          // `transform` on `.snap > *`; if that's the FlipCard itself it
+          // overrides the flip's rotateY and taps appear to do nothing.
           if (slot.kind === "story") {
             return (
               <section className={`${styles.snap} ${i === 0 ? "snapActive" : ""}`} key={slot.article.id}>
-                <FlipCard article={slot.article} position={slot.position} user={user} />
+                <div className={styles.slotInner}>
+                  <FlipCard article={slot.article} position={slot.position} user={user} />
+                </div>
               </section>
             );
           }
           if (slot.kind === "nudge" && nudge) {
             return (
               <section className={styles.snap} key="nudge">
-                <NudgeCard nudge={nudge} user={user} />
+                <div className={styles.slotInner}>
+                  <NudgeCard nudge={nudge} user={user} />
+                </div>
               </section>
             );
           }
           if (slot.kind === "thread" && thread) {
             return (
               <section className={styles.snap} key="thread">
-                <ThreadFeedCard thread={thread} />
+                <div className={styles.slotInner}>
+                  <ThreadFeedCard thread={thread} />
+                </div>
               </section>
             );
           }
           if (slot.kind === "digest") {
             return (
               <section className={styles.snap} key={`digest-${slot.index}`}>
+                <div className={styles.slotInner}>
                 <div className={styles.digest}>
                   <div className={styles.dHead}>
                     <div className={styles.dKick}>60-second catch-up</div>
@@ -236,12 +286,14 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
                   </div>
                   <div className={styles.dFoot}>Keep flicking for full stories</div>
                 </div>
+                </div>
               </section>
             );
           }
           if (slot.kind !== "end") return null;
           return (
             <section className={styles.snap} key="end">
+              <div className={styles.slotInner}>
               <div className={styles.endCard}>
                 <svg viewBox="0 0 60 52" width="60" height="52" aria-hidden>
                   <path
@@ -251,6 +303,7 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
                 </svg>
                 <div className={styles.endFin}>That&rsquo;s today.</div>
                 <p>You moved through <b>{readCount}</b> screens this session.<br />Fresh stories land every hour.</p>
+              </div>
               </div>
             </section>
           );

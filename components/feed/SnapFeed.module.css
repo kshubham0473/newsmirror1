@@ -199,3 +199,22 @@
   .snap > * { transform: none; opacity: 1; filter: none; transition: none; }
   .bDotPing::after { animation: none; }
 }
+
+/* settle-transform target; children (FlipCard etc.) transform freely inside */
+.slotInner { height: 100%; }
+.slotInner > * { height: 100%; }
+
+/* pull-to-refresh hint */
+.pullHint {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 6;
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}

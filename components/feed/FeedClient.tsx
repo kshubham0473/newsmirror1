@@ -9,12 +9,11 @@ import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import { useNudge } from "@/lib/useNudge";
 import { getAffinity, topTopics } from "@/lib/affinity";
-import ArticleCard from "./ArticleCard";
+import { decodeEntities } from "@/lib/decodeEntities";
 import SnapFeed from "./SnapFeed";
 import BlotGlyph from "./BlotGlyph";
 import type { FeedThread } from "./ThreadFeedCard";
 import Onboarding from "@/components/ui/Onboarding";
-import RefreshBanner, { type RefreshBannerHandle } from "@/components/ui/RefreshBanner";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import styles from "./FeedClient.module.css";
 
@@ -49,8 +48,6 @@ interface Props {
   threadsStrip?: FeedThread[];
 }
 
-type ViewMode = "cards" | "list";
-
 /**
  * Feed ordering: recency (50%) + multi-outlet cluster boost (25%) + topic
  * affinity (25%), with an exploration slot every 6th card — the best story
@@ -68,11 +65,11 @@ function orderFeed(
 
   const scored = articles.map((a) => {
     const ageH = (now - new Date(a.published_at ?? a.ingested_at).getTime()) / 3600000;
-    const recency = Math.max(0, 1 - ageH / 48);
+    const recency = Math.max(0, 1 - ageH / 30);
     const cluster = Math.min(1, ((a.cluster_source_count ?? 1) - 1) / 4);
     const affRaw = Math.max(0, ...(a.topic_tags ?? []).map((t) => affinity[t] ?? 0));
     const aff = affRaw / maxAff;
-    return { a, score: 0.5 * recency + 0.25 * cluster + 0.25 * aff };
+    return { a, score: 0.6 * recency + 0.2 * cluster + 0.2 * aff };
   });
   scored.sort((x, y) => y.score - x.score);
 
@@ -108,17 +105,14 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
   const { user, loading: authLoading, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
-  const refreshBannerRef = useRef<RefreshBannerHandle>(null);
 
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   // Affinity loads post-mount (localStorage) — SSR renders the neutral order
   const [affinity, setAffinity] = useState<Record<string, number>>({});
   const [exploreTopics, setExploreTopics] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [activeTopic, setActiveTopic] = useState<TopicId | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showYou, setShowYou] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
@@ -141,9 +135,9 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = viewMode === "list" ? "auto" : "hidden";
+    document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = "auto"; };
-  }, [viewMode]);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     setIsReloading(true);
@@ -200,16 +194,12 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
     setShowOnboarding(false);
   };
 
-  const busy = isRefreshing || isReloading;
+  const busy = isReloading;
   const displayArticles = filtered.length > 0 ? filtered : initialArticles;
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const today   = displayArticles.filter((a) =>  a.published_at && new Date(a.published_at) >= todayStart);
-  const earlier = displayArticles.filter((a) => !a.published_at || new Date(a.published_at) <  todayStart);
 
   return (
-    <div className={`${styles.shell} ${viewMode === "list" ? styles.listShell : ""}`}>
+    <div className={styles.shell}>
 
       {showOnboarding && loaded && (
         <Onboarding sources={allSources} onDone={handleOnboardingDone} />
@@ -238,29 +228,16 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
               <path d="M1 3.5h12M3.5 7h7M6 10.5h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
           </button>
-          {viewMode === "cards" && (
-            <>
-              <button
-                className={styles.iconBtn}
-                onClick={() => setViewMode("list")}
-                aria-label="Switch to list view"
-              >
-                <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
-                  <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-              </button>
-              <button
-                className={styles.iconBtn}
-                onClick={() => setShowYou(true)}
-                aria-label="You"
-              >
-                <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
-                  <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
-                  <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-              </button>
-            </>
-          )}
+          <button
+            className={styles.iconBtn}
+            onClick={() => setShowYou(true)}
+            aria-label="You"
+          >
+            <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
+              <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -269,7 +246,7 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
         <>
           <div className={styles.backdrop} onClick={() => setSourceFilterOpen(false)} />
           <div className={styles.sourceDropdown}>
-            {viewMode === "cards" && (
+            {(
               <div className={styles.sheetTopics}>
                 <div className={styles.sheetLabel}>Topics</div>
                 <div className={styles.sheetPills}>
@@ -304,12 +281,19 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
       )}
 
       {/* ── Developing strip — Threads at reading-flow level (cards mode) ── */}
-      {viewMode === "cards" && threadsStrip.length > 0 && (
+      {(threadsStrip.length > 0 || topClusters.length > 0) && (
         <div className={styles.devStrip}>
           <Link href="/threads" className={styles.devStripLabel} prefetch>
-            <span className={styles.devDot} />Developing
+            <span className={styles.devDot} />Now
           </Link>
           <div className={styles.devStripScroll}>
+            {/* Breaking multi-outlet stories first — trending the moment they cluster */}
+            {topClusters.slice(0, 3).map((c) => (
+              <Link key={c.cluster_id} href={`/timeline/${c.cluster_id}`} className={`${styles.devChip} ${styles.hotChip}`} prefetch>
+                {decodeEntities(c.headline).length > 42 ? `${decodeEntities(c.headline).slice(0, 42)}…` : decodeEntities(c.headline)}
+                <span className={styles.devChipDay}>{c.cluster_source_count}⚡</span>
+              </Link>
+            ))}
             {threadsStrip.map((t) => (
               <Link key={t.id} href={`/threads/${t.id}`} className={styles.devChip} prefetch>
                 {t.title ?? t.anchor_entity}
@@ -320,153 +304,30 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
         </div>
       )}
 
-      {/* ── Topic pill bar — list mode only; cards mode filters live in the sheet ── */}
-      {viewMode === "list" && (
-      <div className={styles.topicBar}>
-        <button
-          className={`${styles.topicPill} ${!activeTopic ? styles.topicPillActive : ""}`}
-          onClick={() => setActiveTopic(null)}
-        >All</button>
-        {TOPICS.map((t) => (
-          <button
-            key={t.id}
-            className={`${styles.topicPill} ${activeTopic === t.id ? styles.topicPillActive : ""}`}
-            onClick={() => setActiveTopic(t.id as TopicId)}
-          >{t.label}</button>
-        ))}
-      </div>
-      )}
-
-      {/* ── Trending bar — list mode only; cards mode gives the space to stories ── */}
-      {viewMode === "list" && topClusters.length > 0 && (
-        <div className={styles.trendingBar}>
-          <span className={styles.trendingLabel}>Trending</span>
-          <div className={styles.trendingDivider} aria-hidden />
-          <div className={styles.trendingScroll}>
-            {topClusters.map((cluster, i) => {
-              const hasDivergence = (cluster.cluster_divergence_score ?? 0) > 0.3;
-              return (
-                <Link
-                  key={cluster.cluster_id}
-                  href={`/timeline/${cluster.cluster_id}`}
-                  className={styles.trendingItem}
-                  prefetch
-                >
-                  {i > 0 && <span className={styles.trendingSep} aria-hidden>·</span>}
-                  {hasDivergence && (
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden className={styles.trendingWave}>
-                      <path d="M0.5 4h1.5L3 1.5 4.5 6.5 5 4H7.5" stroke="#d97706" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                  <span className={styles.trendingHeadline}>{cluster.headline}</span>
-                  <span className={styles.trendingCount}>{cluster.cluster_source_count}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {busy && (
         <div className={styles.progressBar} aria-hidden>
           <div className={styles.progressFill} />
         </div>
       )}
 
-      <RefreshBanner ref={refreshBannerRef} onRefresh={handleRefresh} onCheckingChange={setIsRefreshing} />
-
       {/* ── Content ── */}
       {busy ? (
         <div className={styles.skeleton} aria-hidden>
           <div className={styles.skelCard} />
         </div>
-      ) : viewMode === "cards" ? (
-        <SnapFeed articles={displayArticles} user={user} nudge={nudge} thread={topThread} onAdvance={setAdvanceCount} />
       ) : (
-        <main className={styles.listMain}>
-          {displayArticles.length === 0 ? (
-            <div className={styles.empty}><p>No stories match your filters.</p></div>
-          ) : (
-            <>
-              {today.length > 0 && (
-                <section>
-                  <h2 className={styles.sectionLabel}>Today</h2>
-                  <div className={styles.listGrid}>
-                    {today.map((a, i) => <ArticleCard key={a.id} article={a} index={i} user={user} />)}
-                  </div>
-                </section>
-              )}
-              {earlier.length > 0 && (
-                <section>
-                  <h2 className={styles.sectionLabel}>Earlier</h2>
-                  <div className={styles.listGrid}>
-                    {earlier.map((a, i) => <ArticleCard key={a.id} article={a} index={today.length + i} user={user} />)}
-                  </div>
-                </section>
-              )}
-            </>
-          )}
-        </main>
+        <SnapFeed
+          articles={displayArticles}
+          user={user}
+          nudge={nudge}
+          thread={topThread}
+          onAdvance={setAdvanceCount}
+          onRefresh={handleRefresh}
+        />
       )}
 
       {/* ── PWA install prompt ── */}
       <InstallPrompt />
-
-      {/* ── Connected bottom nav — list mode only; cards mode is full-bleed stories ── */}
-      {viewMode === "list" && (
-      <nav className={styles.bottomNavWrap} aria-label="Main navigation">
-        <div className={styles.bottomNav}>
-
-          {/* Cards — nav renders only in list mode, so never active here */}
-          <button
-            className={styles.navBtn}
-            onClick={() => setViewMode("cards")}
-            aria-label="Card feed"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-              <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-              <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-              <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-            </svg>
-          </button>
-
-          {/* Curved connector */}
-          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
-            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-          </svg>
-
-          {/* List */}
-          <button
-            className={`${styles.navBtn} ${styles.navBtnActive}`}
-            onClick={() => setViewMode("list")}
-            aria-label="List feed"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-          </button>
-
-          {/* Curved connector */}
-          <svg className={styles.navConnector} width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
-            <path d="M0 10 Q10 2 20 10" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-          </svg>
-
-          {/* You */}
-          <button
-            className={`${styles.navBtn} ${showYou ? styles.navBtnActive : ""}`}
-            onClick={() => setShowYou(true)}
-            aria-label="You"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M3 16a6 6 0 0 1 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-          </button>
-
-        </div>
-      </nav>
-      )}
 
       {/* ── You sheet ── */}
       {showYou && (

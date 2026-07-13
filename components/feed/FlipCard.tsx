@@ -185,12 +185,6 @@ export default function FlipCard({ article, position, user = null }: Props) {
           </a>
         </div>
 
-        {hasFlip && (
-          <button className={styles.peel} onClick={() => doFlip(true)} aria-label="Flip to the other side">
-            <span className={styles.peelFold} aria-hidden />
-            <span className={styles.peelLabel} aria-hidden>2 sides ↻</span>
-          </button>
-        )}
       </div>
 
       {/* ── BACK ── */}
