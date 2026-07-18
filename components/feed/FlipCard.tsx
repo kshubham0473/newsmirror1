@@ -8,6 +8,7 @@ import { useReadingEvents } from "@/lib/useReadingEvents";
 import { useArticleReaction } from "@/lib/useArticleReaction";
 import { decodeEntities } from "@/lib/decodeEntities";
 import { recordSignal, SIGNAL } from "@/lib/affinity";
+import FollowButton from "./FollowButton";
 import styles from "./FlipCard.module.css";
 
 // Pastel front faces cycle by position — same palette as the old stack
@@ -69,15 +70,15 @@ export default function FlipCard({ article, position, user = null }: Props) {
 
   const doFlip = (next: boolean) => {
     setFlipped(next);
-    if (next) recordSignal(article.topic_tags, SIGNAL.flip);
+    if (next) recordSignal(article.topic_tags, SIGNAL.flip, article.key_entities);
   };
   const doReact = (value: 1 | -1) => {
     react(value);
-    recordSignal(article.topic_tags, value === 1 ? SIGNAL.reactUp : SIGNAL.reactDown);
+    recordSignal(article.topic_tags, value === 1 ? SIGNAL.reactUp : SIGNAL.reactDown, article.key_entities);
   };
   const doOpen = () => {
     trackRead({ articleId: article.id, sourceId: article.source_id });
-    recordSignal(article.topic_tags, SIGNAL.open);
+    recordSignal(article.topic_tags, SIGNAL.open, article.key_entities);
   };
 
   const sourceName = article.sources?.name ?? "Unknown";
@@ -241,6 +242,7 @@ export default function FlipCard({ article, position, user = null }: Props) {
 
           <div className={styles.bFoot}>
             <button className={styles.unflip} onClick={() => doFlip(false)}>↺ Back to story</button>
+            <FollowButton entities={article.key_entities} topics={article.topic_tags} compact />
             {article.cluster_id && (
               <Link href={`/timeline/${article.cluster_id}`} className={styles.tlBtn} prefetch>
                 Full timeline →
@@ -252,10 +254,18 @@ export default function FlipCard({ article, position, user = null }: Props) {
     </div>
   );
 
-  return isHot ? (
-    <div className={styles.hotRing}>
-      <span className={styles.hotLabel}>⚡ Framing gap</span>
+  // Multi-outlet stories render as a visible STACK — sheets peeking out behind
+  // the card make "there are other versions of this story" physical, not hinted.
+  const stacked = hasFlip ? (
+    <div className={styles.stackWrap} data-count={Math.min(sourceCount, 4)}>
       {card}
     </div>
   ) : card;
+
+  return isHot ? (
+    <div className={styles.hotRing}>
+      <span className={styles.hotLabel}>⚡ Framing gap</span>
+      {stacked}
+    </div>
+  ) : stacked;
 }

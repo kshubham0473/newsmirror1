@@ -230,3 +230,16 @@
   font-family: var(--font-display);
   color: var(--text-tertiary);
 }
+
+.followRow { margin-top: 12px; }
+
+.contextLine {
+  margin-top: 12px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  padding-left: 10px;
+}
+.contextLine b { color: var(--text-primary); font-weight: 600; }

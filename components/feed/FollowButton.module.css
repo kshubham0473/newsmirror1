@@ -1,0 +1,20 @@
+.btn {
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn:active { transform: scale(0.95); }
+.on {
+  background: rgba(91, 191, 180, 0.16);
+  border-color: rgba(91, 191, 180, 0.55);
+}
+.compact { padding: 5px 10px; font-size: 0.62rem; }

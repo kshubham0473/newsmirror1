@@ -1,0 +1,101 @@
+/* DeltaCard — the "while you were away" catch-up. Dark, quiet, information-first. */
+
+.card {
+  height: 100%;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #211d18, #17141180);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f2ede4;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 0 14px;
+  overflow: hidden;
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.7);
+}
+
+.kick {
+  font-family: var(--font-ui);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(242, 237, 228, 0.55);
+  font-weight: 700;
+  padding: 0 22px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 600;
+  margin: 8px 22px 4px;
+}
+.title em { font-style: italic; font-weight: 400; color: #5bbfb4; }
+
+.list {
+  flex: 1;
+  margin-top: 10px;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+  color: inherit;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(242, 237, 228, 0.4);
+  flex: none;
+  position: relative;
+  top: -2px;
+}
+.dotFollowed { background: #5bbfb4; box-shadow: 0 0 8px #5bbfb488; }
+
+.line {
+  font-family: var(--font-body);
+  font-size: 0.97rem;
+  line-height: 1.45;
+  flex: 1;
+  margin: 0;
+}
+
+.followTag {
+  font-family: var(--font-ui);
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5bbfb4;
+  border: 1px solid #5bbfb455;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 8px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.meta {
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  color: rgba(242, 237, 228, 0.5);
+  flex: none;
+  white-space: nowrap;
+}
+
+.foot {
+  flex: none;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  color: rgba(242, 237, 228, 0.45);
+  padding-top: 10px;
+}

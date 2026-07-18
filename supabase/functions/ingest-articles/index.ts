@@ -2073,6 +2073,183 @@ Rules: 2-3 sides max, grouped by genuinely different framing (cite only outlets 
   return Response.json({ results, timestamp: new Date().toISOString() });
 }
 
+// ─── PHASE: BEAT CLUSTERS ─────────────────────────────────────────────────────
+// One-line "what changed" per cluster that gained articles since its last beat.
+// Cached per cluster — cost scales with news volume, never with users.
+
+async function handleBeatClusters(): Promise<Response> {
+  const BATCH_SIZE = 12;
+  const results = { examined: 0, beats_written: 0, skipped_no_change: 0, errors: 0, rate_limited: false };
+
+  try {
+    const { data: clusters, error } = await supabase
+      .from("story_clusters")
+      .select(`
+        id, canonical_headline, last_beat_article_count,
+        article_clusters ( articles ( id, headline, summary, published_at, source_id ) )
+      `)
+      .gte("created_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (error) throw error;
+
+    const eligible = (clusters as any[] ?? [])
+      .map((c) => {
+        const arts = (c.article_clusters ?? [])
+          .flatMap((ac: any) => ac.articles ?? [])
+          .filter((a: any) => a.headline)
+          .sort((a: any, b: any) =>
+            new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime());
+        const srcCount = new Set(arts.map((a: any) => a.source_id)).size;
+        return { ...c, _arts: arts, _srcCount: srcCount };
+      })
+      .filter((c) => {
+        if (c._srcCount < 2 || c._arts.length < 2) return false;
+        if (c._arts.length <= (c.last_beat_article_count ?? 0)) { results.skipped_no_change++; return false; }
+        return true;
+      })
+      .slice(0, BATCH_SIZE);
+
+    if (!eligible.length) return Response.json({ message: "No clusters need beats", results });
+
+    for (const cluster of eligible) {
+      results.examined++;
+      try {
+        const { data: prevBeats } = await supabase
+          .from("cluster_beats")
+          .select("beat")
+          .eq("cluster_id", cluster.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const prevBeat = prevBeats?.[0]?.beat ?? null;
+
+        const latest = cluster._arts.slice(0, 6).map((a: any) =>
+          `- ${a.headline}${a.summary ? ` :: ${String(a.summary).slice(0, 180)}` : ""}`).join("\n");
+
+        const prompt = `You track a developing news story. Write ONE short line (max 22 words) stating the newest development — what a reader who already knows the story needs to learn now.
+
+Story: ${cluster.canonical_headline}
+${prevBeat ? `Previous update we showed the reader: ${prevBeat}\n` : ""}Latest coverage (newest first):
+${latest}
+
+Rules:
+- Report only what the coverage above says. Never invent facts, names, or numbers.
+- If nothing genuinely new versus the previous update, return {"beat": null}.
+- Neutral, factual tone. No opinions. Return JSON: {"beat": "<one line>"}`;
+
+        const raw = GROQ_API_KEY ? await groqJson(prompt, 120, GROQ_MODEL_SMART) : await geminiJson(prompt, 120);
+        const parsed = JSON.parse(raw);
+        const beat = typeof parsed.beat === "string" ? parsed.beat.trim() : null;
+
+        if (beat && beat.length > 10) {
+          const { error: insErr } = await supabase
+            .from("cluster_beats")
+            .upsert({ cluster_id: cluster.id, beat, article_count: cluster._arts.length },
+                    { onConflict: "cluster_id,beat", ignoreDuplicates: true });
+          if (insErr) { results.errors++; continue; }
+          results.beats_written++;
+        } else {
+          results.skipped_no_change++;
+        }
+        // Either way, don't re-examine until the cluster grows again
+        await supabase.from("story_clusters")
+          .update({ last_beat_article_count: cluster._arts.length })
+          .eq("id", cluster.id);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("429") || msg.toLowerCase().includes("rate")) {
+          results.rate_limited = true;
+          console.warn("[beats] Rate limited — stopping batch");
+          break;
+        }
+        console.error("[beats] error:", msg.slice(0, 200));
+        results.errors++;
+      }
+    }
+    return Response.json({ message: "Beat pass complete", results });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e), results }, { status: 500 });
+  }
+}
+
+// ─── PHASE: ENTITY CARDS ──────────────────────────────────────────────────────
+// "Who is X / why it matters" for entities newly prominent in coverage.
+// One call per NEW entity, cached forever in entity_cards.
+
+async function handleEntityCards(): Promise<Response> {
+  const BATCH_SIZE = 10;
+  const MIN_ARTICLES = 3;
+  const results = { candidates: 0, cards_written: 0, errors: 0, rate_limited: false };
+
+  try {
+    const { data: recent, error } = await supabase
+      .from("articles")
+      .select("key_entities, headline")
+      .gte("ingested_at", new Date(Date.now() - 72 * 3600 * 1000).toISOString())
+      .not("key_entities", "is", null);
+    if (error) throw error;
+
+    // Count entity frequency + collect sample headlines
+    const freq = new Map<string, { n: number; heads: string[] }>();
+    for (const a of (recent as any[] ?? [])) {
+      for (const e of (a.key_entities ?? [])) {
+        const k = String(e).toLowerCase().trim();
+        if (k.length < 3) continue;
+        const cur = freq.get(k) ?? { n: 0, heads: [] };
+        cur.n++;
+        if (cur.heads.length < 3) cur.heads.push(a.headline);
+        freq.set(k, cur);
+      }
+    }
+    const prominent = Array.from(freq.entries())
+      .filter(([, v]) => v.n >= MIN_ARTICLES)
+      .sort((a, b) => b[1].n - a[1].n)
+      .slice(0, 60);
+    if (!prominent.length) return Response.json({ message: "No prominent entities", results });
+
+    const { data: existing } = await supabase
+      .from("entity_cards")
+      .select("entity_key")
+      .in("entity_key", prominent.map(([k]) => k));
+    const have = new Set((existing as any[] ?? []).map((r) => r.entity_key));
+    const todo = prominent.filter(([k]) => !have.has(k)).slice(0, BATCH_SIZE);
+    results.candidates = todo.length;
+
+    for (const [key, info] of todo) {
+      try {
+        const prompt = `Write a tiny context card for a news reader joining a story late.
+
+Entity: "${key}"
+It appears in current Indian news coverage, e.g.:
+${info.heads.map((h) => `- ${h}`).join("\n")}
+
+Return JSON: {"who": "<max 18 words: who/what this is>", "why": "<max 22 words: why it is in the news now, based only on the headlines above>"}
+Rules: only use knowledge you are certain of plus the headlines given. If you don't know this entity, return {"who": null}. Never copy names from these instructions into unrelated fields.`;
+
+        const raw = await groqJson(prompt, 140);
+        const parsed = JSON.parse(raw);
+        if (parsed.who && parsed.why) {
+          const { error: insErr } = await supabase
+            .from("entity_cards")
+            .upsert({ entity_key: key, card: { who: parsed.who, why: parsed.why } });
+          if (insErr) results.errors++;
+          else results.cards_written++;
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("429") || msg.toLowerCase().includes("rate")) {
+          results.rate_limited = true;
+          break;
+        }
+        results.errors++;
+      }
+    }
+    return Response.json({ message: "Entity cards pass complete", results });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e), results }, { status: 500 });
+  }
+}
+
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -2092,6 +2269,8 @@ Deno.serve(async (req) => {
   if (phase === "detect-threads")   return handleDetectThreads();
   if (phase === "curate-threads")   return handleCurateThreads();
   if (phase === "synthesize-threads") return handleSynthesizeThreads();
+  if (phase === "beat-clusters")    return handleBeatClusters();
+  if (phase === "entity-cards")     return handleEntityCards();
 
   return Response.json({ error: `Unknown phase: ${phase}` }, { status: 400 });
 });

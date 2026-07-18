@@ -22,6 +22,7 @@ export interface Article {
   state_trust_score: number | null;
   economic_score: number | null;
   institution_score: number | null;
+  key_entities?: string[] | null;
   sources?: Pick<Source, "id" | "name" | "home_url" | "language">;
   // Populated by feed query join (Build 3C)
   cluster_id?: string | null;

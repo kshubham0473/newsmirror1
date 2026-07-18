@@ -56,15 +56,36 @@ function save(store: Store) {
   } catch { /* ignore */ }
 }
 
-/** Record an engagement signal against an article's topics. */
-export function recordSignal(topics: string[] | null | undefined, weight: number) {
-  if (!topics?.length || !isBrowser()) return;
+/** Record an engagement signal against an article's topics and entities.
+ *  Entities live in the same decayed store under an "e:" prefix — they power
+ *  fine-grained interest (a saga, a club, a person) vs coarse topics. */
+export function recordSignal(
+  topics: string[] | null | undefined,
+  weight: number,
+  entities?: string[] | null
+) {
+  if (!isBrowser()) return;
+  if (!topics?.length && !entities?.length) return;
   const store = load();
-  for (const t of topics) {
+  for (const t of topics ?? []) {
     store.scores[t] = (store.scores[t] ?? 0) + weight;
+  }
+  for (const e of entities ?? []) {
+    const k = "e:" + e.toLowerCase().trim();
+    if (k.length < 5) continue;
+    store.scores[k] = (store.scores[k] ?? 0) + weight;
   }
   store.updated = Date.now();
   save(store);
+}
+
+/** Max decayed affinity across an article's entities (0 if none). */
+export function entityAffinity(
+  entities: string[] | null | undefined,
+  scores: Record<string, number>
+): number {
+  if (!entities?.length) return 0;
+  return Math.max(0, ...entities.map((e) => scores["e:" + e.toLowerCase().trim()] ?? 0));
 }
 
 /** Current decayed affinity map: topic → score (may be negative). */
@@ -75,7 +96,7 @@ export function getAffinity(): Record<string, number> {
 /** The reader's top-N topics by affinity (positive scores only). */
 export function topTopics(n = 3): string[] {
   return Object.entries(load().scores)
-    .filter(([, v]) => v > 0)
+    .filter(([k, v]) => v > 0 && !k.startsWith("e:"))
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
     .map(([k]) => k);

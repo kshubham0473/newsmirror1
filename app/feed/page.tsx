@@ -17,7 +17,7 @@ export default async function FeedPage() {
     .from("articles")
     .select(`
       id, source_id, url, headline, body, summary, image_url,
-      published_at, ingested_at, topic_tags,
+      published_at, ingested_at, topic_tags, key_entities,
       identity_score, state_trust_score, economic_score, institution_score,
       sources ( id, name, home_url, language ),
       article_clusters (
@@ -154,6 +154,20 @@ export default async function FeedPage() {
     .slice(0, 12)
     .map(({ _score: _s, ...a }: any) => a);
 
+  // 8b. Latest "what changed" beat per cluster — powers the catch-up delta
+  const beats: Record<string, string> = {};
+  if (allClusterIds.length > 0) {
+    const { data: beatRows } = await supabase
+      .from("cluster_beats")
+      .select("cluster_id, beat, created_at")
+      .in("cluster_id", allClusterIds)
+      .order("created_at", { ascending: false })
+      .limit(120);
+    for (const r of (beatRows ?? []) as any[]) {
+      if (!beats[r.cluster_id]) beats[r.cluster_id] = r.beat; // first = newest
+    }
+  }
+
   // 9. Developing Threads (curated) — the masthead strip + in-feed doorway card
   const { data: topThreads } = await supabase
     .from("threads")
@@ -171,6 +185,7 @@ export default async function FeedPage() {
       topClusters={topClusters as any}
       topThread={topThread as any}
       threadsStrip={threadsList as any}
+      beats={beats}
     />
   );
 }

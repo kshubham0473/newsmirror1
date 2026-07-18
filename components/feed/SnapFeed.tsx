@@ -6,6 +6,7 @@ import type { Article } from "@/lib/types";
 import FlipCard, { type ArticleWithFraming } from "./FlipCard";
 import NudgeCard from "./NudgeCard";
 import ThreadFeedCard, { type FeedThread } from "./ThreadFeedCard";
+import DeltaCard, { type DeltaItem } from "./DeltaCard";
 import type { Nudge } from "@/lib/useNudge";
 import { decodeEntities } from "@/lib/decodeEntities";
 import { recordSignal, SIGNAL } from "@/lib/affinity";
@@ -56,12 +57,13 @@ type Slot =
   | { kind: "digest"; briefs: ArticleWithFraming[]; index: number }
   | { kind: "nudge" }
   | { kind: "thread" }
+  | { kind: "delta" }
   | { kind: "end" };
 
 const THREAD_SLOT = 3; // zero-based: early — the doorway into the developing issue
 const NUDGE_SLOT = 6;  // after the thread card + first digest
 
-function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean, hasThread: boolean): Slot[] {
+function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean, hasThread: boolean, hasDelta: boolean): Slot[] {
   const slots: Slot[] = [];
   let i = 0;
   let position = 0;
@@ -80,6 +82,8 @@ function buildSlots(articles: ArticleWithFraming[], hasNudge: boolean, hasThread
   if (hasThread) {
     slots.splice(Math.min(THREAD_SLOT, slots.length), 0, { kind: "thread" });
   }
+  // Catch-up delta owns the very first screen after a real away-gap
+  if (hasDelta) slots.unshift({ kind: "delta" });
   if (hasNudge) {
     slots.splice(Math.min(NUDGE_SLOT, slots.length), 0, { kind: "nudge" });
   }
@@ -98,9 +102,13 @@ interface Props {
   onAdvance?: (count: number) => void;
   /** Pull-to-refresh handler (router.refresh from the parent) */
   onRefresh?: () => void;
+  /** Catch-up delta items — "while you were away" (empty = no delta card) */
+  deltaItems?: DeltaItem[];
+  /** Human label for when the reader left, e.g. "9:40 pm" */
+  awaySince?: string;
 }
 
-export default function SnapFeed({ articles, user = null, nudge = null, thread = null, onAdvance, onRefresh }: Props) {
+export default function SnapFeed({ articles, user = null, nudge = null, thread = null, onAdvance, onRefresh, deltaItems = [], awaySince = "" }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0.04);
   const [readCount, setReadCount] = useState(0);
@@ -133,8 +141,8 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
   // Exclude the nudge's article from regular slots so it doesn't appear twice
   const slots = useMemo(() => {
     const pool = nudge ? articles.filter((a) => a.id !== nudge.article.id) : articles;
-    return buildSlots(pool, !!nudge, !!thread);
-  }, [articles, nudge, thread]);
+    return buildSlots(pool, !!nudge, !!thread, deltaItems.length >= 2);
+  }, [articles, nudge, thread, deltaItems]);
 
   // Observe which slot is snapped → reveal animations, seen-marking, dwell tracking
   useEffect(() => {
@@ -153,7 +161,7 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
       if (ms < DWELL_MS || slot?.kind !== "story" || dwellLogged.has(slot.article.id)) return;
       dwellLogged.add(slot.article.id);
       // Long dwell = reading the summary — the core act in a summary-first app
-      recordSignal(slot.article.topic_tags, SIGNAL.dwell);
+      recordSignal(slot.article.topic_tags, SIGNAL.dwell, slot.article.key_entities);
       if (user) {
         createClient()
           .from("reading_events")
@@ -245,6 +253,15 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
               <section className={styles.snap} key="nudge">
                 <div className={styles.slotInner}>
                   <NudgeCard nudge={nudge} user={user} />
+                </div>
+              </section>
+            );
+          }
+          if (slot.kind === "delta") {
+            return (
+              <section className={`${styles.snap} ${i === 0 ? "snapActive" : ""}`} key="delta">
+                <div className={styles.slotInner}>
+                  <DeltaCard items={deltaItems} awaySince={awaySince} />
                 </div>
               </section>
             );

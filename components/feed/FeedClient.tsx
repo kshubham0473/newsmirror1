@@ -8,8 +8,11 @@ import { TOPICS } from "@/lib/types";
 import { usePreferences } from "@/lib/usePreferences";
 import { useAuth } from "@/lib/useAuth";
 import { useNudge } from "@/lib/useNudge";
-import { getAffinity, topTopics } from "@/lib/affinity";
+import { getAffinity, topTopics, entityAffinity } from "@/lib/affinity";
+import { getFollows, normEntity } from "@/lib/follows";
+import { beginVisit } from "@/lib/lastVisit";
 import { decodeEntities } from "@/lib/decodeEntities";
+import type { DeltaItem } from "./DeltaCard";
 import SnapFeed from "./SnapFeed";
 import BlotGlyph from "./BlotGlyph";
 import type { FeedThread } from "./ThreadFeedCard";
@@ -46,6 +49,8 @@ interface Props {
   topClusters?: ClusterStory[];
   topThread?: FeedThread | null;
   threadsStrip?: FeedThread[];
+  /** Latest "what changed" beat per cluster_id (from cluster_beats) */
+  beats?: Record<string, string>;
 }
 
 /**
@@ -58,7 +63,8 @@ interface Props {
 function orderFeed(
   articles: Article[],
   affinity: Record<string, number>,
-  exploreTopics: Set<string>
+  exploreTopics: Set<string>,
+  follows: Set<string>
 ): Article[] {
   const now = Date.now();
   const maxAff = Math.max(1, ...Object.values(affinity).map((v) => Math.abs(v)));
@@ -67,12 +73,16 @@ function orderFeed(
     const ageH = (now - new Date(a.published_at ?? a.ingested_at).getTime()) / 3600000;
     const recency = Math.max(0, 1 - ageH / 30);
     const cluster = Math.min(1, ((a.cluster_source_count ?? 1) - 1) / 4);
-    const affRaw = Math.max(0, ...(a.topic_tags ?? []).map((t) => affinity[t] ?? 0));
-    const aff = affRaw / maxAff;
-    // Freshness hard-buckets: nothing >12h old outranks the last 6h, however
-    // big its cluster or affinity — staleness is the #1 churn complaint.
-    const bucket = ageH < 6 ? 0 : ageH < 12 ? 1 : 2;
-    return { a, bucket, score: 0.6 * recency + 0.2 * cluster + 0.2 * aff };
+    const topicAff = Math.max(0, ...(a.topic_tags ?? []).map((t) => affinity[t] ?? 0)) / maxAff;
+    // Entity affinity: fine-grained interest (a saga, a club, a person) —
+    // weighted above coarse topics when present
+    const entAff = Math.min(1, (1.25 * entityAffinity(a.key_entities, affinity)) / maxAff);
+    const aff = Math.max(topicAff, entAff);
+    const followed = (a.key_entities ?? []).some((e) => follows.has(normEntity(e)));
+    // Freshness hard-buckets: nothing >12h old outranks the last 6h — UNLESS
+    // the reader explicitly follows the story (follows escape the buckets).
+    const bucket = followed ? 0 : ageH < 6 ? 0 : ageH < 12 ? 1 : 2;
+    return { a, bucket, score: 0.6 * recency + 0.2 * cluster + 0.2 * aff + (followed ? 0.35 : 0) };
   });
   scored.sort((x, y) => x.bucket - y.bucket || y.score - x.score);
 
@@ -104,7 +114,7 @@ function orderFeed(
   return result;
 }
 
-export default function FeedClient({ initialArticles, topClusters = [], topThread = null, threadsStrip = [] }: Props) {
+export default function FeedClient({ initialArticles, topClusters = [], topThread = null, threadsStrip = [], beats = {} }: Props) {
   const { user, loading: authLoading, signIn, signOut } = useAuth();
   const { prefs, loaded, save } = usePreferences(user);
   const router = useRouter();
@@ -120,6 +130,8 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [advanceCount, setAdvanceCount] = useState(0);
+  const [follows, setFollows] = useState<Set<string>>(new Set());
+  const [deltaCutoff, setDeltaCutoff] = useState<number | null>(null);
   const { nudge } = useNudge(user, initialArticles);
 
   // Onboarding: only decide once auth AND prefs are fully resolved — deciding
@@ -130,11 +142,13 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
     setShowOnboarding(!prefs.onboardingDone);
   }, [authLoading, loaded, prefs.onboardingDone]);
 
-  // Read seen card IDs + affinity from localStorage on mount
+  // Read seen card IDs + affinity + follows from localStorage on mount
   useEffect(() => {
     setSeenIds(readSeenIds());
     setAffinity(getAffinity());
     setExploreTopics(new Set(topTopics(3)));
+    setFollows(new Set(getFollows()));
+    setDeltaCutoff(beginVisit());
   }, []);
 
   useEffect(() => {
@@ -187,10 +201,59 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
     const unseen = base.filter((a) => !seenIds.has(a.id));
     const seen   = base.filter((a) =>  seenIds.has(a.id));
     return [
-      ...orderFeed(unseen, affinity, exploreTopics),
-      ...orderFeed(seen, affinity, exploreTopics),
+      ...orderFeed(unseen, affinity, exploreTopics, follows),
+      ...orderFeed(seen, affinity, exploreTopics, follows),
     ];
-  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, seenIds, affinity, exploreTopics]);
+  }, [initialArticles, activeTopic, prefs.topics, effectiveSources, seenIds, affinity, exploreTopics, follows]);
+
+  // ── Catch-up delta: biggest developments since the reader left ──
+  const { deltaItems, awaySince } = useMemo(() => {
+    if (!deltaCutoff) return { deltaItems: [] as DeltaItem[], awaySince: "" };
+    const fresh = initialArticles.filter(
+      (a) => new Date(a.ingested_at).getTime() > deltaCutoff
+    );
+    // Group by cluster (standalone articles form their own group)
+    const groups = new Map<string, Article[]>();
+    for (const a of fresh) {
+      const k = a.cluster_id ?? `a:${a.id}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(a);
+    }
+    const now = Date.now();
+    const ranked = Array.from(groups.entries()).map(([k, arts]) => {
+      const rep = arts.reduce((best, x) =>
+        new Date(x.published_at ?? x.ingested_at).getTime() >
+        new Date(best.published_at ?? best.ingested_at).getTime() ? x : best);
+      const followed = arts.some((x) => (x.key_entities ?? []).some((e) => follows.has(normEntity(e))));
+      const entAff = Math.max(...arts.map((x) => entityAffinity(x.key_entities, affinity)));
+      const velocity = Math.min(1, arts.length / 4);
+      const ageH = (now - new Date(rep.published_at ?? rep.ingested_at).getTime()) / 3600000;
+      const freshness = Math.max(0, 1 - ageH / 12);
+      const srcCount = rep.cluster_source_count ?? 1;
+      const score = (followed ? 2 : 0) + (entAff > 0 ? 0.6 : 0) + velocity + freshness + Math.min(1, (srcCount - 1) / 4);
+      return { k, rep, followed, srcCount, score, ageH };
+    })
+    // A delta item must have a reason to exist: followed, known interest, or broad coverage
+    .filter((g) => g.followed || g.score >= 1.4)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+    const items: DeltaItem[] = ranked.map((g) => ({
+      line: (g.rep.cluster_id && beats[g.rep.cluster_id]) || g.rep.headline,
+      cluster_id: g.rep.cluster_id ?? null,
+      article_url: g.rep.url,
+      source_count: g.srcCount,
+      followed: g.followed,
+      age: g.ageH < 1 ? "just now" : `${Math.round(g.ageH)}h ago`,
+    }));
+
+    const d = new Date(deltaCutoff);
+    const sameDay = new Date().toDateString() === d.toDateString();
+    const label = sameDay
+      ? d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
+      : d.toLocaleString("en-IN", { weekday: "short", hour: "numeric", minute: "2-digit" });
+    return { deltaItems: items, awaySince: label };
+  }, [initialArticles, deltaCutoff, follows, affinity, beats]);
 
   const handleOnboardingDone = ({ topics, sources }: { topics: TopicId[]; sources: string[] }) => {
     save({ topics, sources, onboardingDone: true });
@@ -326,6 +389,8 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
           thread={topThread}
           onAdvance={setAdvanceCount}
           onRefresh={handleRefresh}
+          deltaItems={deltaItems}
+          awaySince={awaySince}
         />
       )}
 

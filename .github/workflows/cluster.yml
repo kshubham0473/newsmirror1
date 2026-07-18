@@ -41,3 +41,18 @@ jobs:
             echo "::error::analyze-clusters returned HTTP $HTTP_STATUS"
             exit 1
           fi
+
+      # "What changed" beats — powers the catch-up delta card. Cheap: only
+      # clusters that gained articles since their last beat get one 70B call.
+      - name: Beat clusters
+        continue-on-error: true
+        run: |
+          sleep 30
+          HTTP_STATUS=$(curl -s -o /tmp/beats_response.json -w "%{http_code}" -X POST \
+            --max-time 150 \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/ingest-articles?phase=beat-clusters" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/beats_response.json

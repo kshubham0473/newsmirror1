@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createStaticClient } from "@/lib/supabase-static";
+import FollowButton from "@/components/feed/FollowButton";
 import styles from "./thread.module.css";
 
 export const revalidate = 300;
@@ -34,7 +35,7 @@ export default async function ThreadPage({ params }: { params: { id: string } })
 
   const { data: thread } = await supabase
     .from("threads")
-    .select("id, title, anchor_entity, status, article_count, source_count, first_seen, last_article_at, synthesis, spectrum_spread, synthesis_updated_at")
+    .select("id, title, anchor_entity, anchor_key, status, article_count, source_count, first_seen, last_article_at, synthesis, spectrum_spread, synthesis_updated_at")
     .eq("id", params.id)
     .single();
 
@@ -59,6 +60,14 @@ export default async function ThreadPage({ params }: { params: { id: string } })
     .sort((a, b) => (b.published_at ?? b.ingested_at ?? "").localeCompare(a.published_at ?? a.ingested_at ?? ""))
     .slice(0, 6);
 
+  // Context card for readers joining the saga late (cached, LLM-generated)
+  const { data: ecard } = await supabase
+    .from("entity_cards")
+    .select("card")
+    .eq("entity_key", String(t.anchor_key ?? t.anchor_entity ?? "").toLowerCase())
+    .maybeSingle();
+  const context = (ecard as any)?.card ?? null;
+
   const synthesis = t.synthesis ?? null;
   const sides: any[] = Array.isArray(synthesis?.sides) ? synthesis.sides : [];
   const days = daysBetween(t.first_seen, t.last_article_at);
@@ -77,6 +86,14 @@ export default async function ThreadPage({ params }: { params: { id: string } })
         <div className={styles.runline}>
           <b>{t.source_count} outlets</b><i /><span>{t.article_count} articles</span><i /><span>{fmtDate(t.first_seen)} → {fmtDate(t.last_article_at)}</span>
         </div>
+        <div className={styles.followRow}>
+          <FollowButton entities={[t.anchor_entity]} />
+        </div>
+        {context?.who && (
+          <p className={styles.contextLine}>
+            <b>Context:</b> {context.who}{context.why ? ` — ${context.why}` : ""}
+          </p>
+        )}
       </div>
 
       {synthesis?.where_it_stands ? (
