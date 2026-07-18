@@ -321,6 +321,11 @@ export default function SnapFeed({ articles, user = null, nudge = null, thread =
                 </svg>
                 <div className={styles.endFin}>That&rsquo;s today.</div>
                 <p>You moved through <b>{readCount}</b> screens this session.<br />Fresh stories land every hour.</p>
+                {onRefresh && (
+                  <button className={styles.endRefresh} onClick={onRefresh}>
+                    ↻ Check for new stories
+                  </button>
+                )}
               </div>
               </div>
             </section>

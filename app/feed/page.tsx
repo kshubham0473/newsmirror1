@@ -39,7 +39,25 @@ export default async function FeedPage() {
 
   if (error) console.error("Feed fetch error:", error);
 
-  const raw = data ?? [];
+  let raw = data ?? [];
+
+  // A transient DB error must not get CACHED as an empty feed (the
+  // "two cards only" bug). Retry once; if still failing, throw so ISR
+  // keeps serving the last good page instead of an empty one.
+  if (raw.length === 0 && error) {
+    const { data: retryData, error: retryErr } = await supabase
+      .from("articles")
+      .select("id, source_id, url, headline, body, summary, image_url, published_at, ingested_at, topic_tags, key_entities, identity_score, state_trust_score, economic_score, institution_score, sources ( id, name, home_url, language ), article_clusters ( cluster_id, story_clusters ( id, framing_insight, divergence_score, framing_groups ) )")
+      .not("summary", "is", null)
+      .neq("summary", "")
+      .neq("summary", "[skipped]")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(FETCH_LIMIT);
+    if (retryErr || !retryData?.length) {
+      throw new Error("Feed data unavailable — keeping last good page");
+    }
+    raw = retryData;
+  }
 
   // 2. Collect cluster IDs from this pool
   const allClusterIds = Array.from(

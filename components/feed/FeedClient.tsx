@@ -130,6 +130,7 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
   const [sourceFilterOpen, setSourceFilterOpen] = useState(false);
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [advanceCount, setAdvanceCount] = useState(0);
+  const retriedRef = useRef(false);
   const [follows, setFollows] = useState<Set<string>>(new Set());
   const [deltaCutoff, setDeltaCutoff] = useState<number | null>(null);
   const { nudge } = useNudge(user, initialArticles);
@@ -380,6 +381,23 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
       {busy ? (
         <div className={styles.skeleton} aria-hidden>
           <div className={styles.skelCard} />
+        </div>
+      ) : displayArticles.length === 0 ? (
+        <div className={styles.emptyState}>
+          <p className={styles.emptyTitle}>Couldn&rsquo;t load stories</p>
+          <p className={styles.emptyHint}>Weak connection, most likely. Fresh news is waiting on the other side.</p>
+          <button
+            className={styles.emptyRetry}
+            onClick={() => {
+              // First tap: soft refresh. If that served the same cached empty
+              // page, second tap: full reload past the service worker.
+              if (retriedRef.current) { window.location.reload(); return; }
+              retriedRef.current = true;
+              handleRefresh();
+            }}
+          >
+            ↻ Try again
+          </button>
         </div>
       ) : (
         <SnapFeed

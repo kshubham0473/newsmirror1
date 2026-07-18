@@ -218,3 +218,17 @@
   text-transform: uppercase;
   color: var(--text-secondary);
 }
+
+.endRefresh {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.endRefresh:active { transform: scale(0.96); }
