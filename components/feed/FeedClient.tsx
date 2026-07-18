@@ -69,9 +69,12 @@ function orderFeed(
     const cluster = Math.min(1, ((a.cluster_source_count ?? 1) - 1) / 4);
     const affRaw = Math.max(0, ...(a.topic_tags ?? []).map((t) => affinity[t] ?? 0));
     const aff = affRaw / maxAff;
-    return { a, score: 0.6 * recency + 0.2 * cluster + 0.2 * aff };
+    // Freshness hard-buckets: nothing >12h old outranks the last 6h, however
+    // big its cluster or affinity — staleness is the #1 churn complaint.
+    const bucket = ageH < 6 ? 0 : ageH < 12 ? 1 : 2;
+    return { a, bucket, score: 0.6 * recency + 0.2 * cluster + 0.2 * aff };
   });
-  scored.sort((x, y) => y.score - x.score);
+  scored.sort((x, y) => x.bucket - y.bucket || y.score - x.score);
 
   if (exploreTopics.size === 0) return scored.map((s) => s.a);
 

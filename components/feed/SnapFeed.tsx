@@ -31,9 +31,10 @@ function markSeen(articleId: string) {
 const SPEC_COLORS = ["var(--spec-cool)", "var(--spec-mid)", "var(--spec-warm)"];
 
 function specColor(a: Article): string {
+  // Confidence gate: ≥2 scored axes before showing a political colour
   const vals = [a.identity_score, a.state_trust_score, a.economic_score, a.institution_score]
     .filter((v): v is number => typeof v === "number" && v > 0);
-  if (!vals.length) return SPEC_COLORS[1];
+  if (vals.length < 2) return SPEC_COLORS[1];
   const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
   return avg < 0.4 ? SPEC_COLORS[0] : avg > 0.6 ? SPEC_COLORS[2] : SPEC_COLORS[1];
 }

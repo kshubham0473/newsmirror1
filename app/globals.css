@@ -31,12 +31,15 @@
   --font-body:    "Newsreader", Georgia, serif;
   --font-ui:      "Archivo", system-ui, sans-serif;
 
-  /* Perspective spectrum — one colour language everywhere */
-  --spec-cool: #0E7C7B;
+  /* Perspective spectrum — one colour language everywhere.
+     Politically legible in India: saffron = right / pro-establishment framing,
+     teal-blue = left / critical framing. Colours describe the FRAMING of the
+     coverage, never the topic or the people in the story. */
+  --spec-cool: #0F7E96;
   --spec-mid:  #B5A98C;
-  --spec-warm: #C4611A;
-  --spec-cool-soft: #DCEDE9;
-  --spec-warm-soft: #F6E3D2;
+  --spec-warm: #E8761A;
+  --spec-cool-soft: #DAEAF0;
+  --spec-warm-soft: #FBE7D1;
   --ink-deep: #161310;
 
   --page-pad: 1rem;

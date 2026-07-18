@@ -133,10 +133,10 @@ export default async function TimelinePage({
     .map((row: any) => row.articles)
     .filter(Boolean)
     .sort((a: TimelineArticle, b: TimelineArticle) => {
-      // Chronological: oldest first
+      // Latest first — readers want what's new, then how it developed
       const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
       const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
-      return aTime - bTime;
+      return bTime - aTime;
     });
 
   if (articles.length === 0) notFound();
@@ -160,8 +160,8 @@ export default async function TimelinePage({
   );
 
   const sourceCount = articles.length;
-  const firstArticle = articles[0];
-  const lastArticle = articles[articles.length - 1];
+  // Descending order: newest is first
+  const lastArticle = articles[0];
 
   // 5. Group articles by date for the timeline
   const dateGroups: { dateKey: string; label: string; articles: TimelineArticle[] }[] = [];

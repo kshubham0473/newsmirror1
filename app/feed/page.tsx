@@ -141,10 +141,14 @@ export default async function FeedPage() {
       return true;
     })
     .sort((a: any, b: any) => {
-      // Sort by: has framing insight first, then by source count desc
-      const aHasFraming = a.cluster_framing_insight ? 1 : 0;
-      const bHasFraming = b.cluster_framing_insight ? 1 : 0;
-      if (bHasFraming !== aHasFraming) return bHasFraming - aHasFraming;
+      // "Now" means now: fresh clusters first (6h/12h/older buckets), breadth
+      // of coverage second. A stale analyzed cluster must not beat breaking news.
+      const ageBucket = (x: any) => {
+        const h = (Date.now() - new Date(x.published_at ?? x.ingested_at).getTime()) / 3600000;
+        return h < 6 ? 0 : h < 12 ? 1 : 2;
+      };
+      const ab = ageBucket(a), bb = ageBucket(b);
+      if (ab !== bb) return ab - bb;
       return (b.cluster_source_count ?? 0) - (a.cluster_source_count ?? 0);
     })
     .slice(0, 12)

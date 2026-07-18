@@ -45,11 +45,13 @@ interface Props {
   user?: User | null;
 }
 
-/** Average available axis scores → 0..1 position on the perspective spectrum */
+/** Average available axis scores → 0..1 position on the perspective spectrum.
+ *  Confidence gate: political colour needs ≥2 scored axes — one axis alone
+ *  isn't enough signal to hang saffron or teal on. */
 function spectrumPosition(a: Article): number | null {
   const vals = [a.identity_score, a.state_trust_score, a.economic_score, a.institution_score]
     .filter((v): v is number => typeof v === "number" && v > 0);
-  if (!vals.length) return null;
+  if (vals.length < 2) return null;
   return vals.reduce((s, v) => s + v, 0) / vals.length;
 }
 
@@ -110,10 +112,17 @@ export default function FlipCard({ article, position, user = null }: Props) {
     if (Math.abs(dx) > 64 && Math.abs(dy) < 48) doFlip(!flipped);
   };
 
+  // Ambient framing tint: only when confidently away from centre — a wrong
+  // political colour costs more trust than the feature earns.
+  const ambient = pos !== null && Math.abs(pos - 0.5) >= 0.15 ? spectrumColor(pos) : null;
+
   const card = (
     <div
-      className={`${styles.fcard} ${flipped ? styles.flipped : ""}`}
-      style={{ ["--div" as string]: `${divergencePct}%` }}
+      className={`${styles.fcard} ${flipped ? styles.flipped : ""} ${hasFlip ? styles.canFlip : ""}`}
+      style={{
+        ["--div" as string]: `${divergencePct}%`,
+        ...(ambient ? { ["--amb" as string]: ambient } : {}),
+      }}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
