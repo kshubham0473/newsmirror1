@@ -118,6 +118,14 @@ export default async function FeedPage() {
       .map((p: any) => ({ source: p.sources?.name ?? "—", headline: p.headline }));
   }
 
+  // 4c. Image borrowing: an imageless article inherits a cluster-peer's photo —
+  //     it's the same story, and cards with images hold attention far better
+  for (const a of withCluster) {
+    if (a.image_url || !a.cluster_id) continue;
+    const donor = (byCluster.get(a.cluster_id) ?? []).find((p: any) => p.image_url);
+    if (donor) a.image_url = donor.image_url;
+  }
+
   // 5. Source cap — max MAX_PER_SOURCE per source before scoring
   const sourceSeen: Record<string, number> = {};
   const capped = withCluster.filter((a: any) => {

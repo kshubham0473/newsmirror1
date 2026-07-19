@@ -231,11 +231,15 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
       const ageH = (now - new Date(rep.published_at ?? rep.ingested_at).getTime()) / 3600000;
       const freshness = Math.max(0, 1 - ageH / 12);
       const srcCount = rep.cluster_source_count ?? 1;
-      const score = (followed ? 2 : 0) + (entAff > 0 ? 0.6 : 0) + velocity + freshness + Math.min(1, (srcCount - 1) / 4);
+      // Topic affinity gives un-clustered fresh articles a fair chance — right
+      // after ingest, breaking news has no cluster yet (cluster runs periodically)
+      const topicAff = Math.max(0, ...arts.flatMap((x) => (x.topic_tags ?? []).map((t) => affinity[t] ?? 0)));
+      const score = (followed ? 2 : 0) + (entAff > 0 ? 0.6 : 0) + (topicAff > 0 ? 0.3 : 0)
+        + velocity + freshness + Math.min(1, (srcCount - 1) / 4);
       return { k, rep, followed, srcCount, score, ageH };
     })
     // A delta item must have a reason to exist: followed, known interest, or broad coverage
-    .filter((g) => g.followed || g.score >= 1.4)
+    .filter((g) => g.followed || g.score >= 1.15)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 

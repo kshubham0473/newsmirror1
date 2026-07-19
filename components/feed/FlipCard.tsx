@@ -159,7 +159,7 @@ export default function FlipCard({ article, position, user = null }: Props) {
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden>
                   <path d="M2 6a4 4 0 0 1 7-2.5M10 6a4 4 0 0 1-7 2.5M9 1v2.5H6.5M3 11V8.5H5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                 </svg>
-                2 sides
+                {hasInsight ? "2 sides" : `${Math.max(sourceCount, peers.length + 1)} outlets`}
               </button>
             )}
             {pos !== null && (
