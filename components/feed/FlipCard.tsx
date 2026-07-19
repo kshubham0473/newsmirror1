@@ -70,7 +70,17 @@ export default function FlipCard({ article, position, user = null }: Props) {
 
   const doFlip = (next: boolean) => {
     setFlipped(next);
-    if (next) recordSignal(article.topic_tags, SIGNAL.flip, article.key_entities);
+    if (next) {
+      recordSignal(article.topic_tags, SIGNAL.flip, article.key_entities);
+      // Log flipped ids — the Mirror's "framing gaps you opened" metric
+      try {
+        const raw = localStorage.getItem("nm_flipped_cards");
+        const ids: string[] = raw ? JSON.parse(raw) : [];
+        if (!ids.includes(article.id)) {
+          localStorage.setItem("nm_flipped_cards", JSON.stringify([...ids, article.id].slice(-300)));
+        }
+      } catch { /* ignore */ }
+    }
   };
   const doReact = (value: 1 | -1) => {
     react(value);

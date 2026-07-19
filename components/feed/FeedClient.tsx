@@ -22,7 +22,7 @@ import styles from "./FeedClient.module.css";
 
 const SEEN_CARDS_KEY = "nm_seen_cards";
 const SEEN_CAP = 200;
-const ADMIN_EMAIL = "shubhamk0473@gmail.com";
+const ADMIN_EMAIL = "kshubham0473@gmail.com";
 
 function readSeenIds(): Set<string> {
   try {

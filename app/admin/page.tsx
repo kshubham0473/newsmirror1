@@ -1,11 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from "@/lib/supabase";
+import { notFound } from "next/navigation";
+import { createServerClient } from "@/lib/supabase-server";
 import AdminSources from "@/components/admin/AdminSources";
 
 export const revalidate = 0;
 
+const ADMIN_EMAIL = "kshubham0473@gmail.com";
+
 export default async function AdminPage() {
-  const supabase = createClient();
+  const supabase = createServerClient();
+
+  // Server-side guard — the admin surface simply doesn't exist for anyone else
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.email !== ADMIN_EMAIL) notFound();
 
   const { data: sources } = await supabase
     .from("sources")

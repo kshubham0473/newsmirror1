@@ -7,14 +7,22 @@ import { useAuth } from "@/lib/useAuth";
 import { getAffinity } from "@/lib/affinity";
 import styles from "./MirrorClient.module.css";
 
-const AXES = [
-  { key: "identity_score", label: "Identity framing", lo: "Pluralist", hi: "Majoritarian" },
-  { key: "state_trust_score", label: "State narrative", lo: "Sceptical", hi: "Deferential" },
-  { key: "economic_score", label: "Economic framing", lo: "Welfare", hi: "Market" },
-  { key: "institution_score", label: "Institutional tone", lo: "Critical", hi: "Deferential" },
-] as const;
+/* Mirror v2 — "Your reading diet".
+   Describes the COVERAGE the reader consumed, in politically familiar terms.
+   Never issues a verdict about the reader. The 4 classification axes stay in
+   the pipeline; here they only decide how each article's framing is labelled. */
+
+const AXIS_KEYS = ["identity_score", "state_trust_score", "economic_score", "institution_score"] as const;
+
+const FRAMES = {
+  fav:  { label: "Establishment-friendly", color: "var(--spec-warm)" },
+  crit: { label: "Establishment-critical", color: "var(--spec-cool)" },
+  neu:  { label: "Centre / wire-neutral",  color: "var(--spec-mid)" },
+} as const;
+type FrameKey = keyof typeof FRAMES;
 
 interface ReadRow {
+  article_id: string;
   read_at: string;
   sources: { name: string } | null;
   articles: {
@@ -22,42 +30,54 @@ interface ReadRow {
     state_trust_score: number | null;
     economic_score: number | null;
     institution_score: number | null;
+    article_clusters?: { story_clusters: { divergence_score: number | null }[] | null }[] | null;
   } | null;
+}
+
+/** Same confidence gate as the feed: ≥2 scored axes or no framing label. */
+function frameOf(a: ReadRow["articles"]): FrameKey | null {
+  if (!a) return null;
+  const vals = AXIS_KEYS.map((k) => a[k]).filter((v): v is number => typeof v === "number" && v > 0);
+  if (vals.length < 2) return null;
+  const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return avg > 0.6 ? "fav" : avg < 0.4 ? "crit" : "neu";
+}
+
+function divergenceOf(a: ReadRow["articles"]): number {
+  const sc = a?.article_clusters?.[0]?.story_clusters?.[0];
+  return sc?.divergence_score ?? 0;
 }
 
 interface Stats {
   total: number;
   sourceCount: number;
   weekCount: number;
-  axes: Record<string, number | null>;
+  mix: Record<FrameKey, number>;
+  mixTotal: number;
+  gapsSeen: number;
+  gapsOpened: number;
   diet: { name: string; count: number; pct: number }[];
-  lean: number | null; // overall 0..1
 }
 
-function computeStats(rows: ReadRow[]): Stats {
+function computeStats(rows: ReadRow[], flipped: Set<string>): Stats {
   const now = Date.now();
   const week = 7 * 24 * 3600 * 1000;
   const bySource = new Map<string, number>();
-  const axisVals: Record<string, number[]> = {};
+  const mix: Record<FrameKey, number> = { fav: 0, crit: 0, neu: 0 };
   let weekCount = 0;
+  let gapsSeen = 0;
+  let gapsOpened = 0;
 
   for (const r of rows) {
     const src = r.sources?.name ?? "Unknown";
     bySource.set(src, (bySource.get(src) ?? 0) + 1);
     if (now - new Date(r.read_at).getTime() < week) weekCount++;
-    for (const ax of AXES) {
-      const v = r.articles?.[ax.key];
-      // scores of exactly 0 are a known classifier artefact — skip them
-      if (typeof v === "number" && v > 0) (axisVals[ax.key] ??= []).push(v);
+    const f = frameOf(r.articles);
+    if (f) mix[f]++;
+    if (divergenceOf(r.articles) >= 0.4) {
+      gapsSeen++;
+      if (flipped.has(r.article_id)) gapsOpened++;
     }
-  }
-
-  const axes: Record<string, number | null> = {};
-  const allVals: number[] = [];
-  for (const ax of AXES) {
-    const vals = axisVals[ax.key] ?? [];
-    axes[ax.key] = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
-    allVals.push(...vals);
   }
 
   const diet = Array.from(bySource.entries())
@@ -69,34 +89,28 @@ function computeStats(rows: ReadRow[]): Stats {
     total: rows.length,
     sourceCount: bySource.size,
     weekCount,
-    axes,
+    mix,
+    mixTotal: mix.fav + mix.crit + mix.neu,
+    gapsSeen,
+    gapsOpened,
     diet,
-    lean: allVals.length ? allVals.reduce((s, v) => s + v, 0) / allVals.length : null,
   };
 }
 
-function leanWord(lean: number | null): { word: string; color: string } {
-  if (lean === null) return { word: "unformed", color: "#B5A98C" };
-  if (lean < 0.4) return { word: "teal — sceptical, welfare-first", color: "#0E7C7B" };
-  if (lean > 0.6) return { word: "terracotta — establishment-leaning", color: "#C4611A" };
-  return { word: "balanced sand", color: "#B5A98C" };
+/** Blot colour follows the DIET majority — it paints what you consumed. */
+function dietColor(stats: Stats | null): string {
+  if (!stats || stats.mixTotal < 5) return "#B5A98C";
+  const { fav, crit, neu } = stats.mix;
+  if (fav > crit && fav > neu) return "#E8761A";
+  if (crit > fav && crit > neu) return "#0F7E96";
+  return "#B5A98C";
 }
 
 export default function MirrorClient() {
   const { user, signIn } = useAuth();
   const [rows, setRows] = useState<ReadRow[] | null>(null);
-  const [baseline, setBaseline] = useState<Record<string, number | null> | null>(null);
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-
-  // Pool baseline — what the axis markers compare against (see docs/nudge-design.md)
-  useEffect(() => {
-    const supabase = createClient();
-    supabase
-      .from("source_pool_baseline")
-      .select("identity_score, state_trust_score, economic_score, institution_score")
-      .single()
-      .then(({ data }) => { if (data) setBaseline(data as any); });
-  }, []);
 
   // The feed locks body scroll; this page needs it back
   useEffect(() => {
@@ -104,11 +118,19 @@ export default function MirrorClient() {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // Flipped cards — local log, feeds the "gaps you opened" metric
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("nm_flipped_cards");
+      if (raw) setFlipped(new Set(JSON.parse(raw)));
+    } catch { /* ignore */ }
+  }, []);
+
   // Topic diet — what the interest algorithm has learned (local, works for guests)
   const [topicDiet, setTopicDiet] = useState<{ topic: string; pct: number }[]>([]);
   useEffect(() => {
     const aff = getAffinity();
-    const positives = Object.entries(aff).filter(([, v]) => v > 0);
+    const positives = Object.entries(aff).filter(([k, v]) => v > 0 && !k.startsWith("e:"));
     const total = positives.reduce((s, [, v]) => s + v, 0);
     if (total > 0) {
       setTopicDiet(
@@ -125,7 +147,7 @@ export default function MirrorClient() {
     const supabase = createClient();
     supabase
       .from("reading_events")
-      .select("read_at, sources(name), articles(identity_score, state_trust_score, economic_score, institution_score)")
+      .select("article_id, read_at, sources(name), articles(identity_score, state_trust_score, economic_score, institution_score, article_clusters(story_clusters(divergence_score)))")
       .eq("user_id", user.id)
       .order("read_at", { ascending: false })
       .limit(500)
@@ -135,17 +157,20 @@ export default function MirrorClient() {
       });
   }, [user]);
 
-  const stats = useMemo(() => (rows ? computeStats(rows) : null), [rows]);
-  const lean = leanWord(stats?.lean ?? null);
+  const stats = useMemo(() => (rows ? computeStats(rows, flipped) : null), [rows, flipped]);
+  const blotColor = dietColor(stats);
   const blotScale = 1 + Math.min((stats?.total ?? 0) * 0.008, 0.35);
+  const pct = (n: number) => (stats && stats.mixTotal > 0 ? Math.round((n / stats.mixTotal) * 100) : 0);
 
   return (
     <div className={styles.shell}>
       <header className={styles.head}>
         <Link href="/feed" className={styles.back}>← Briefing</Link>
-        <h1 className={styles.title}>Your <em>mirror</em></h1>
+        <h1 className={styles.title}>Your <em>reading diet</em></h1>
         <p className={styles.sub}>
-          {user ? "What your reading looks like." : "The blot only forms when someone reads."}
+          {user
+            ? "What you consumed — not who you are. The mirror describes coverage, it doesn't judge readers."
+            : "The blot only forms when someone reads."}
         </p>
       </header>
       <div className={styles.rule} />
@@ -155,7 +180,7 @@ export default function MirrorClient() {
         <svg viewBox="0 0 200 170" width="200" height="170" aria-hidden>
           <defs>
             <linearGradient id="mirrorBlot" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor={lean.color} stopOpacity="0.95" />
+              <stop offset="0" stopColor={blotColor} stopOpacity="0.95" />
               <stop offset="1" stopColor="#161310" />
             </linearGradient>
             <filter id="gooey">
@@ -205,48 +230,64 @@ export default function MirrorClient() {
         </div>
       ) : (
         <>
-          <p className={styles.caption}>
-            Your ink runs <b style={{ color: lean.color }}>{lean.word}</b>
-            {stats.weekCount > 0 ? <> · {stats.weekCount} stories this week</> : null}
-          </p>
-
           <div className={styles.stats}>
             <div className={styles.stat}><span className={styles.statN}>{stats.total}</span><span className={styles.statL}>Stories</span></div>
-            <div className={styles.stat}><span className={styles.statN}>{stats.sourceCount}</span><span className={styles.statL}>Sources</span></div>
+            <div className={styles.stat}><span className={styles.statN}>{stats.sourceCount}</span><span className={styles.statL}>Outlets</span></div>
             <div className={styles.stat}><span className={styles.statN}>{stats.weekCount}</span><span className={styles.statL}>This week</span></div>
           </div>
 
-          <div className={styles.secLabel}>Where you stand</div>
-          <div className={styles.axes}>
-            {AXES.map((ax) => {
-              const v = stats.axes[ax.key];
-              const pool = baseline?.[ax.key];
-              return (
-                <div className={styles.axis} key={ax.key}>
-                  <div className={styles.axisLbl}>
-                    <span>{ax.lo}</span><b>{ax.label}</b><span>{ax.hi}</span>
-                  </div>
-                  <div className={styles.axisBar}>
-                    {typeof pool === "number" && pool > 0 && (
-                      <span className={styles.axisAvg} style={{ left: `${pool * 100}%` }} title="Average of all NewsMirror sources" />
-                    )}
-                    {v !== null && <span className={styles.axisYou} style={{ left: `${v * 100}%` }} />}
-                  </div>
-                  {v === null ? (
-                    <p className={styles.axisCap}>Not enough classified reads yet.</p>
-                  ) : typeof pool === "number" && pool > 0 ? (
-                    <p className={styles.axisCap}>
-                      {Math.abs(v - pool) < 0.05
-                        ? "You read close to the pool average here."
-                        : v < pool
-                          ? `You sit ${ax.lo.toLowerCase()}-of-pool on this axis.`
-                          : `You sit ${ax.hi.toLowerCase()}-of-pool on this axis.`}
-                    </p>
-                  ) : null}
+          {/* ── Framing diet ── */}
+          <div className={styles.secLabel}>Your framing diet</div>
+          {stats.mixTotal >= 5 ? (
+            <>
+              <div className={styles.mixBar} role="img" aria-label="Framing mix of your reads">
+                {(["crit", "neu", "fav"] as FrameKey[]).map((k) =>
+                  stats.mix[k] > 0 ? (
+                    <div
+                      key={k}
+                      className={styles.mixSeg}
+                      style={{ width: `${pct(stats.mix[k])}%`, background: FRAMES[k].color }}
+                    />
+                  ) : null
+                )}
+              </div>
+              <div className={styles.mixLegend}>
+                {(["crit", "neu", "fav"] as FrameKey[]).map((k) => (
+                  <span key={k} className={styles.mixKey}>
+                    <i style={{ background: FRAMES[k].color }} />
+                    {FRAMES[k].label} · <b>{pct(stats.mix[k])}%</b>
+                  </span>
+                ))}
+              </div>
+              <p className={styles.dietNote}>
+                How the coverage you read framed its subjects — based on {stats.mixTotal} classified
+                stories. Colours describe the framing of articles, never the truth of a story or you.
+              </p>
+            </>
+          ) : (
+            <p className={styles.dietNote}>
+              Not enough classified reads yet — this fills in as you read political coverage.
+            </p>
+          )}
+
+          {/* ── Framing gaps ── */}
+          {stats.gapsSeen > 0 && (
+            <>
+              <div className={styles.secLabel}>The other side</div>
+              <div className={styles.gapCard}>
+                <div className={styles.gapNums}>
+                  <b>{stats.gapsOpened}</b> of <b>{stats.gapsSeen}</b>
                 </div>
-              );
-            })}
-          </div>
+                <p className={styles.gapText}>
+                  {stats.gapsSeen} stories you read had a documented framing gap between outlets.
+                  You flipped {stats.gapsOpened === 0 ? "none" : stats.gapsOpened} of them to see
+                  the other side{stats.gapsOpened / stats.gapsSeen >= 0.5
+                    ? " — that's conscious reading."
+                    : ". The flip is one tap."}
+                </p>
+              </div>
+            </>
+          )}
 
           <div className={styles.secLabel}>Your sources</div>
           <div className={styles.diet}>
@@ -260,6 +301,12 @@ export default function MirrorClient() {
               </div>
             ))}
           </div>
+          {stats.sourceCount <= 2 && stats.total >= 10 && (
+            <p className={styles.dietNote}>
+              Nearly everything you read comes from {stats.sourceCount === 1 ? "one outlet" : "two outlets"} —
+              the feed will keep offering others.
+            </p>
+          )}
         </>
       )}
 
