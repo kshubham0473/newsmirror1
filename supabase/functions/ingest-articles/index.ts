@@ -1914,9 +1914,43 @@ ${listing}`;
 
 async function handleSynthesizeThreads(): Promise<Response> {
   const MAX_THREADS = 6;
-  const results = { examined: 0, synthesized: 0, beats_added: 0, skipped_fresh: 0, errors: 0, rate_limited: false };
+  const results = { examined: 0, synthesized: 0, beats_added: 0, skipped_fresh: 0, counters_fixed: 0, errors: 0, rate_limited: false };
 
   try {
+    // Keep thread counters honest — they drive the UI and the freshness check.
+    // Cheap: one pass over links for active threads before synthesis runs.
+    const { data: activeIds } = await supabase
+      .from("threads")
+      .select("id, article_count, source_count, last_article_at")
+      .in("status", ["developing", "steady"]);
+    for (const th of (activeIds ?? []) as any[]) {
+      const { data: linkRows } = await supabase
+        .from("thread_articles")
+        .select("articles(source_id, published_at, ingested_at)")
+        .eq("thread_id", th.id)
+        .limit(500);
+      const rows = ((linkRows ?? []) as any[])
+        .flatMap((l) => (Array.isArray(l.articles) ? l.articles : l.articles ? [l.articles] : []));
+      if (!rows.length) continue;
+      const nArt = rows.length;
+      const nSrc = new Set(rows.map((r: any) => r.source_id)).size;
+      const lastAt = rows
+        .map((r: any) => r.published_at ?? r.ingested_at)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      if (nArt !== th.article_count || nSrc !== th.source_count) {
+        await supabase.from("threads")
+          .update({
+            article_count: nArt,
+            source_count: nSrc,
+            last_article_at: lastAt && lastAt > (th.last_article_at ?? "") ? lastAt : th.last_article_at,
+          })
+          .eq("id", th.id);
+        results.counters_fixed++;
+      }
+    }
+
     const { data: threads, error } = await supabase
       .from("threads")
       .select("id, title, anchor_entity, key_entities, article_count, first_seen, last_article_at, synthesis, synthesis_updated_at")
@@ -1958,10 +1992,17 @@ async function handleSynthesizeThreads(): Promise<Response> {
           .select("articles(id, headline, summary, published_at, ingested_at, source_id, sources(name))")
           .eq("thread_id", t.id)
           .limit(60);
+        // Nested relations come back as ARRAYS — mapping them straight to an
+        // object made every article undefined, so arts was always empty and
+        // synthesis silently no-opped for weeks. Flatten defensively.
         const arts = ((links ?? []) as any[])
-          .map((l) => l.articles).filter((a) => a?.summary)
-          .sort((a, b) => (b.published_at ?? b.ingested_at ?? "").localeCompare(a.published_at ?? a.ingested_at ?? ""));
-        if (arts.length < 3) continue;
+          .flatMap((l) => (Array.isArray(l.articles) ? l.articles : l.articles ? [l.articles] : []))
+          .filter((a: any) => a?.summary)
+          .sort((a: any, b: any) => (b.published_at ?? b.ingested_at ?? "").localeCompare(a.published_at ?? a.ingested_at ?? ""));
+        if (arts.length < 3) {
+          console.warn(`[synth] thread ${t.id} has ${arts.length} usable articles — skipping`);
+          continue;
+        }
 
         // Spectrum spread: distinct source positions (no LLM)
         const spreadSet = new Map<string, number>();

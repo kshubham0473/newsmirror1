@@ -609,3 +609,14 @@
   cursor: pointer;
 }
 .emptyRetry:active { transform: scale(0.96); }
+
+/* freshness stamp — staleness must never be invisible again */
+.asOf {
+  display: block;
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  margin-top: 1px;
+}

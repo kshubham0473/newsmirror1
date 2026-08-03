@@ -157,6 +157,35 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
     return () => { document.body.style.overflow = "auto"; };
   }, []);
 
+  // Self-healing freshness guard: a PWA cold-open can paint a cached page that
+  // is hours or days old. If the newest story we were handed is stale, refetch
+  // once — belt and braces alongside the network-first service worker.
+  const healedRef = useRef(false);
+  useEffect(() => {
+    if (healedRef.current || initialArticles.length === 0) return;
+    healedRef.current = true;
+    const newest = Math.max(
+      ...initialArticles.map((a) => new Date(a.published_at ?? a.ingested_at).getTime())
+    );
+    const ageH = (Date.now() - newest) / 3600000;
+    if (ageH > 3) {
+      console.info(`[feed] payload ${ageH.toFixed(1)}h old — refreshing`);
+      router.refresh();
+    }
+  }, [initialArticles, router]);
+
+  // "As of" stamp — staleness should never again be invisible
+  const asOf = useMemo(() => {
+    if (!initialArticles.length) return "";
+    const newest = Math.max(
+      ...initialArticles.map((a) => new Date(a.published_at ?? a.ingested_at).getTime())
+    );
+    const mins = Math.round((Date.now() - newest) / 60000);
+    if (mins < 90) return `latest ${Math.max(1, mins)}m ago`;
+    const hrs = Math.round(mins / 60);
+    return hrs < 36 ? `latest ${hrs}h ago` : `latest ${Math.round(hrs / 24)}d ago`;
+  }, [initialArticles]);
+
   const handleRefresh = useCallback(() => {
     setIsReloading(true);
     router.refresh();
@@ -210,8 +239,12 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
   // ── Catch-up delta: biggest developments since the reader left ──
   const { deltaItems, awaySince } = useMemo(() => {
     if (!deltaCutoff) return { deltaItems: [] as DeltaItem[], awaySince: "" };
+    // Cap the window: after a 5-day absence "since you left" should still mean
+    // the newest developments, not whatever landed the day after you left.
+    const MAX_LOOKBACK_MS = 36 * 3600 * 1000;
+    const effectiveCutoff = Math.max(deltaCutoff, Date.now() - MAX_LOOKBACK_MS);
     const fresh = initialArticles.filter(
-      (a) => new Date(a.ingested_at).getTime() > deltaCutoff
+      (a) => new Date(a.ingested_at).getTime() > effectiveCutoff
     );
     // Group by cluster (standalone articles form their own group)
     const groups = new Map<string, Article[]>();
@@ -252,6 +285,8 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
       age: g.ageH < 1 ? "just now" : `${Math.round(g.ageH)}h ago`,
     }));
 
+    const longGap = Date.now() - deltaCutoff > MAX_LOOKBACK_MS;
+    if (longGap) return { deltaItems: items, awaySince: "you were last here" };
     const d = new Date(deltaCutoff);
     const sameDay = new Date().toDateString() === d.toDateString();
     const label = sameDay
@@ -356,6 +391,7 @@ export default function FeedClient({ initialArticles, topClusters = [], topThrea
         <div className={styles.devStrip}>
           <Link href="/threads" className={styles.devStripLabel} prefetch>
             <span className={styles.devDot} />Now
+            {asOf && <span className={styles.asOf}>{asOf}</span>}
           </Link>
           <div className={styles.devStripScroll}>
             {/* Breaking multi-outlet stories first — trending the moment they cluster */}

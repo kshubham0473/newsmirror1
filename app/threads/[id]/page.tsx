@@ -54,8 +54,11 @@ export default async function ThreadPage({ params }: { params: { id: string } })
     .select("articles(id, headline, url, published_at, ingested_at, sources(name))")
     .eq("thread_id", t.id)
     .limit(12);
+  // Supabase returns nested relations as ARRAYS here — flatten defensively,
+  // otherwise every article object is really a 1-element array and every
+  // field read comes back undefined (this silently broke "latest coverage").
   const recentArticles = ((links ?? []) as any[])
-    .map((l) => l.articles)
+    .flatMap((l) => (Array.isArray(l.articles) ? l.articles : l.articles ? [l.articles] : []))
     .filter(Boolean)
     .sort((a, b) => (b.published_at ?? b.ingested_at ?? "").localeCompare(a.published_at ?? a.ingested_at ?? ""))
     .slice(0, 6);
